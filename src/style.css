@@ -205,3 +205,32 @@ input, textarea, select {
 input::placeholder, textarea::placeholder {
   @apply text-stone-400; /* 增加对比度，原为 text-ink-light/50 太淡 */
 }
+
+/* Burning Effect */
+@keyframes burn-text {
+  0% { text-shadow: 0 0 2px #FFD700, 0 -2px 4px #FF8C00; color: #FFF; }
+  50% { text-shadow: 0 0 4px #FFD700, 0 -4px 8px #FF4500; color: #FFF; }
+  100% { text-shadow: 0 0 2px #FFD700, 0 -2px 4px #FF8C00; color: #FFF; }
+}
+
+@keyframes burn-flame {
+  0% { transform: scale(1) rotate(-2deg); opacity: 0.8; }
+  50% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-2deg); opacity: 0.8; }
+}
+
+.text-burning {
+  animation: burn-text 2s ease-in-out infinite;
+  font-weight: bold;
+}
+
+.flame-particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: #FF4500;
+  border-radius: 50%;
+  filter: blur(2px);
+  animation: burn-flame 1s infinite alternate;
+  pointer-events: none;
+}

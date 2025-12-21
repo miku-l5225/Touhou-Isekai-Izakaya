@@ -208,9 +208,20 @@ function formatBuffEffect(effect: any) {
         <Coins class="w-4 h-4 text-marisa-gold group-hover/stat:rotate-12 transition-transform" />
         <span class="font-mono font-bold text-izakaya-wood">{{ player.money }}</span>
       </div>
-      <div class="flex items-center gap-2 group/stat" title="战斗力">
-        <Shield class="w-4 h-4 text-orange-500 group-hover/stat:scale-110 transition-transform" />
-        <span class="font-mono text-izakaya-wood">{{ player.power }}</span>
+      <div class="flex items-center gap-2 group/stat relative" title="战斗力">
+        <!-- Burning Effect Background -->
+        <div v-if="player.power >= 80" class="absolute -inset-3 bg-orange-500/20 rounded-full blur-md -z-10 animate-pulse pointer-events-none"></div>
+        
+        <Shield class="w-4 h-4 text-orange-500 group-hover/stat:scale-110 transition-transform" :class="{ 'text-red-500 animate-[bounce_2s_infinite]': player.power >= 80 }" />
+        <span class="font-mono text-izakaya-wood relative" :class="{ 'text-burning': player.power >= 80 }">
+          {{ player.power }}
+          <!-- Flame Particles -->
+          <template v-if="player.power >= 80">
+             <span class="flame-particle -top-3 -left-1 opacity-70" style="animation-delay: 0s;"></span>
+             <span class="flame-particle -top-2 right-0 opacity-60" style="animation-delay: 0.3s;"></span>
+             <span class="flame-particle bottom-0 -right-3 opacity-80" style="animation-delay: 0.6s;"></span>
+          </template>
+        </span>
       </div>
       <div class="flex items-center gap-2 group/stat" title="声望">
         <Star class="w-4 h-4 text-purple-500 group-hover/stat:rotate-180 transition-transform duration-500" />
