@@ -6,13 +6,13 @@
 <br/>
 
 <!-- 多行动态打字效果 -->
-<a href="https://github.com/your-username/touhou-isekai-izakaya">
-  <img src="https://readme-typing-svg.demolab.com?font=Noto+Serif+SC&weight=600&size=28&duration=4000&pause=1000&color=B91C1C&center=true&vCenter=true&multiline=true&repeat=false&width=600&height=50&lines=LLM-Driven+Roleplay+Experience;Simulation+%E2%9C%A6+RPG+%E2%9C%A6+Management" alt="Title" />
+<a href="https://github.com/YoKONCy/touhou-isekai-izakaya">
+  <img src="https://readme-typing-svg.demolab.com?font=Noto+Serif+SC&weight=600&size=28&duration=4000&pause=1000&color=B91C1C&center=true&vCenter=true&multiline=true&repeat=false&width=600&height=50&lines=LLM-Driven+Roleplay+Experience;LLM+%E9%A9%B1%E5%8A%A8%E7%9A%84%E8%A7%92%E8%89%B2%E6%89%AE%E6%BC%94%E4%BD%93%E9%AA%8C;Simulation+%E2%9C%A6+RPG+%E2%9C%A6+Management" alt="Title" />
 </a>
 
 <br/>
 
-<a href="https://github.com/your-username/touhou-isekai-izakaya">
+<a href="https://github.com/YoKONCy/touhou-isekai-izakaya">
   <img src="https://readme-typing-svg.demolab.com?font=Noto+Sans+SC&weight=400&size=14&duration=2500&pause=500&color=8E8E93&center=true&vCenter=true&width=700&height=25&lines=Infinite+Narrative+%E2%9C%A6+Deep+Memory+%E2%9C%A6+Touhou+Project+Fan-fiction" alt="Topics" />
 </a>
 
@@ -30,15 +30,6 @@
 <a href="#-quick-start">
   <img src="https://img.shields.io/badge/Quick-Start-success?style=for-the-badge&logo=rocket&logoColor=white&labelColor=000000" alt="Start">
 </a>
-
-<br/><br/>
-
-<!-- 核心统计徽章 -->
-<img src="https://img.shields.io/github/stars/your-username/touhou-isekai-izakaya?style=for-the-badge&logo=github&logoColor=white&labelColor=1c1c1e&color=FFD60A&label=Stars" alt="Stars">
-&nbsp;
-<img src="https://img.shields.io/github/forks/your-username/touhou-isekai-izakaya?style=for-the-badge&logo=git&logoColor=white&labelColor=1c1c1e&color=30D158&label=Forks" alt="Forks">
-&nbsp;
-<img src="https://img.shields.io/github/license/your-username/touhou-isekai-izakaya?style=for-the-badge&logo=opensourceinitiative&logoColor=white&labelColor=1c1c1e&color=BF5AF2&label=License" alt="License">
 
 <br/><br/>
 
@@ -137,12 +128,25 @@
 > 本项目采用了一套独特的 **"Scribe-Retrieval"** 记忆机制，旨在解决传统 LLM 游戏“聊久了就忘”的通病，实现真正的长期角色扮演体验。
 
 ### ⚙️ Mechanism
-
-<div align="center">
-<img src="https://mermaid.ink/img/pako:eNptkMFqwzAMhl9F6NS-gA-jHXYbZYeSDmO3HUoix4mtYCPjKKWlvH3OpFvHncT_T9_3C6y5Fozg0fpq9DZw9jA6Q-f4q4uO8e16vU7nczp7w_1L-z5w_3o6T6f3y2W6XNI1O7iABwVTaJ31yFPAQ_MGrTNoa_2AExr01iN61P-i1c5_YI8WrbHwS0e31uP7uK-1h4_W0K394Q16b2C0a7gD75vjR0_QOQ9f0qJ36A18SO-7_Z-f1i4p5Qy1lFwIRhWzIhkVU84lE0IJIlIqJpISnkvGBCeM5ZgLwQljnEsmuOBMMEE5Y0wIxrnkQgguOBdMcM6YkIJzLhkXgnPGBBeslIq_b6-fPz0qfEU?type=png" alt="Memory Architecture" width="80%">
-</div>
-
-#### 1. The Scribe (记录者)
+ 
+ <div align="center">
+```mermaid
+graph TD
+    User[User Input] --> ST[#1 Storyteller]
+    ST -->|Dialogue| Scribe[#3 Scribe]
+    Scribe -->|Summarize| DB[(IndexedDB Memory)]
+    
+    subgraph Retrieval Process
+        DB -->|Coarse Filter| L1[Level 1: Coarse]
+        L1 -->|Refined Check| L2[Level 2: Refined]
+        L2 -->|Inject| Context[Context Window]
+    end
+    
+    Context --> ST
+```
+ </div>
+ 
+ #### 1. The Scribe (记录者)
 每一轮对话结束后，独立的 **LLM #3 (Scribe)** 会在后台异步工作，将原始对话**压缩、摘要**为结构化的记忆片段 (Memory Entry)。
 
 #### 2. Hybrid Retrieval (混合检索)
@@ -202,33 +206,33 @@
 <br/>
 
 ## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 16+
-- API Key (OpenAI / Anthropic / DeepSeek compatible)
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/touhou-isekai-izakaya.git
-   cd touhou-isekai-izakaya
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Start development server**
-   ```bash
-   npm run dev
-   ```
-
-4. **Configure API**
-   - Visit `http://localhost:5173`
-   - Click **Settings (⚙️)** icon
-   - Enter your API Base URL and Key
+ 
+ ### 前置要求 (Prerequisites)
+ - Node.js 16+
+ - API Key (支持 OpenAI / Anthropic / DeepSeek 格式)
+ 
+ ### 安装步骤 (Installation)
+ 
+ 1. **克隆仓库 (Clone the repository)**
+    ```bash
+    git clone https://github.com/YoKONCy/touhou-isekai-izakaya.git
+    cd touhou-isekai-izakaya
+    ```
+ 
+ 2. **安装依赖 (Install dependencies)**
+    ```bash
+    npm install
+    ```
+ 
+ 3. **启动开发服务器 (Start development server)**
+    ```bash
+    npm run dev
+    ```
+ 
+ 4. **配置 API (Configure API)**
+    - 访问 `http://localhost:5173`
+    - 点击 **设置 (⚙️)** 图标
+    - 输入您的 API Base URL 和 Key
 
 <br/>
 
