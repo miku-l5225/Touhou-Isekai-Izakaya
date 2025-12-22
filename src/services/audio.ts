@@ -470,30 +470,93 @@ class AudioManager {
 
   // Sound: Spell Cast (Combat)
   public playSpellCast() {
+    this.playSpellCastSingle(); // Default fallback
+  }
+
+  // Sound: Single Target Spell Cast (Fast, Sharp)
+  public playSpellCastSingle() {
     this.init();
     if (!this.ctx || !this.sfxGain) return;
 
     const t = this.ctx.currentTime;
 
-    // Magical shimmer (Multiple sine waves)
-    [440, 554, 659].forEach((freq, i) => {
+    // Fast, high-pitched shimmer
+    [660, 880].forEach((freq, i) => {
         const osc = this.ctx!.createOscillator();
         const gain = this.ctx!.createGain();
         
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, t);
-        osc.frequency.linearRampToValueAtTime(freq * 2, t + 1.0); // Pitch up
+        osc.frequency.linearRampToValueAtTime(freq * 1.5, t + 0.3); // Quick pitch up
         
         const lfo = this.ctx!.createOscillator();
-        lfo.frequency.value = 10 + i * 2;
+        lfo.frequency.value = 20; // Fast vibrato
         const lfoGain = this.ctx!.createGain();
-        lfoGain.gain.value = 50;
+        lfoGain.gain.value = 30;
         lfo.connect(lfoGain);
         lfoGain.connect(osc.frequency);
         lfo.start(t);
 
         gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.1, t + 0.2);
+        gain.gain.linearRampToValueAtTime(0.1, t + 0.05);
+        gain.gain.linearRampToValueAtTime(0, t + 0.5);
+
+        osc.connect(gain);
+        gain.connect(this.sfxGain!);
+        osc.start(t);
+        osc.stop(t + 0.5);
+    });
+  }
+
+  // Sound: AOE Spell Cast (Deep, Resonant, Charging)
+  public playSpellCastAoE() {
+    this.init();
+    if (!this.ctx || !this.sfxGain) return;
+
+    const t = this.ctx.currentTime;
+
+    // 1. Deep Drone (Power gathering)
+    const drone = this.ctx.createOscillator();
+    const droneGain = this.ctx.createGain();
+    drone.type = 'sawtooth';
+    drone.frequency.setValueAtTime(110, t); // Low A
+    drone.frequency.linearRampToValueAtTime(220, t + 1.5); // Slow rise
+    
+    // Lowpass filter opening up
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(200, t);
+    filter.frequency.exponentialRampToValueAtTime(2000, t + 1.5);
+
+    droneGain.gain.setValueAtTime(0, t);
+    droneGain.gain.linearRampToValueAtTime(0.08, t + 0.5);
+    droneGain.gain.linearRampToValueAtTime(0, t + 1.5);
+
+    drone.connect(filter);
+    filter.connect(droneGain);
+    droneGain.connect(this.sfxGain);
+    drone.start(t);
+    drone.stop(t + 1.5);
+
+    // 2. Swirling Highs
+    [440, 554, 659, 880].forEach((freq, i) => {
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, t);
+        
+        // Slow LFO for "swirl"
+        const lfo = this.ctx!.createOscillator();
+        lfo.frequency.value = 4 + i; 
+        const lfoGain = this.ctx!.createGain();
+        lfoGain.gain.value = 20;
+        lfo.connect(lfoGain);
+        lfoGain.connect(osc.frequency);
+        lfo.start(t);
+
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.05, t + 0.2 + (i * 0.1));
         gain.gain.linearRampToValueAtTime(0, t + 1.5);
 
         osc.connect(gain);
@@ -501,6 +564,51 @@ class AudioManager {
         osc.start(t);
         osc.stop(t + 1.5);
     });
+  }
+
+  // Sound: AOE Explosion (Massive Boom)
+  public playAoEExplosion() {
+      this.init();
+      if (!this.ctx || !this.sfxGain) return;
+      const t = this.ctx.currentTime;
+
+      // 1. Sub-bass Boom
+      const osc = this.ctx.createOscillator();
+      const oscGain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(80, t);
+      osc.frequency.exponentialRampToValueAtTime(10, t + 1.0); // Deep drop
+      
+      oscGain.gain.setValueAtTime(1.0, t);
+      oscGain.gain.exponentialRampToValueAtTime(0.01, t + 1.0);
+      
+      osc.connect(oscGain);
+      oscGain.connect(this.sfxGain);
+      osc.start(t);
+      osc.stop(t + 1.0);
+
+      // 2. Wide Noise Wash
+      const bufferSize = this.ctx.sampleRate * 1.5;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+      
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(800, t);
+      filter.frequency.linearRampToValueAtTime(100, t + 1.5); // Muffle down
+      
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.8, t);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 1.5);
+      
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.sfxGain);
+      noise.start(t);
   }
 
   // Sound: Skill Cut-in (Moonlight/Ethereal theme)

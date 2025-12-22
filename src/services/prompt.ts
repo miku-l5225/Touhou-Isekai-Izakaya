@@ -111,6 +111,23 @@ export class PromptService {
       
       finalContent = finalContent.replace(/\{\{global_user_setting\}\}/g, userSettingStr);
 
+      // Difficulty Injection
+      const difficulty = gameStore.state.system.difficulty || 'normal';
+      let difficultTag = '';
+      if (difficulty === 'gentle') {
+          difficultTag = '<difficult>这是一个温柔的世界。NPC会对玩家抱有极大的善意，世界观整体偏向轻松日常，即使是战斗也会点到为止。</difficult>';
+      } else if (difficulty === 'cruel') {
+          difficultTag = '<difficult>这是一个残酷的世界。NPC会对玩家抱有警惕甚至敌意，世界观整体偏向黑暗压抑，生存变得异常艰难。</difficult>';
+      }
+
+      if (difficultTag) {
+          if (finalContent.includes('</addition_setting>')) {
+              finalContent = finalContent.replace('</addition_setting>', `</addition_setting>\n${difficultTag}`);
+          } else {
+              finalContent += `\n\n${difficultTag}`;
+          }
+      }
+
       this.addSection(ctx, 'world_info', '世界观设定', 'system', finalContent);
     };
 

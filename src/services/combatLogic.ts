@@ -225,6 +225,25 @@ export function calculateDamage(
       finalDamage *= 2.5;
   }
 
+  // --- World Difficulty Correction ---
+  if (attacker.isPlayer) {
+      try {
+          const gameStore = useGameStore();
+          const difficulty = gameStore.state.system.difficulty || 'normal';
+          
+          if (difficulty === 'normal') {
+              // -5% correction
+              finalDamage *= 0.95;
+          } else if (difficulty === 'cruel') {
+              // -15% correction
+              finalDamage *= 0.85; 
+          }
+          // gentle: no correction
+      } catch (e) {
+          // Ignore if store not available (e.g. unit testing)
+      }
+  }
+
   finalDamage = Math.floor(finalDamage);
 
   // --- Shield Logic ---

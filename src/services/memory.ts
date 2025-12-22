@@ -138,7 +138,8 @@ ${JSON.stringify(actions)}
         modelType: 'memory'
       });
 
-      const result = JSON.parse(response || '{}');
+      const cleanedResponse = this.cleanJsonString(response || '{}');
+      const result = JSON.parse(cleanedResponse);
       
       if (result.summary) {
         // [Fix] Prevent duplicates: Delete existing summary for this turn
@@ -400,7 +401,8 @@ ${candidates}
             modelType: 'memory'
           });
 
-          const selectedIds: number[] = JSON.parse(response || '[]');
+          const cleanedResponse = this.cleanJsonString(response || '[]');
+          const selectedIds: number[] = JSON.parse(cleanedResponse);
           console.log('[Memory Retrieval] LLM selected IDs:', selectedIds);
           
           if (Array.isArray(selectedIds) && selectedIds.length > 0) {
@@ -467,6 +469,34 @@ ${candidates}
       if (a.add_chars) a.add_chars.forEach((c: any) => entities.add(typeof c === 'string' ? c : c.id || c.name));
     });
     return Array.from(entities);
+  }
+
+  /**
+   * Helper to clean JSON string from LLM response (remove markdown, extra text)
+   */
+  private cleanJsonString(str: string): string {
+    if (!str) return '';
+    let cleaned = str.trim();
+    
+    // Remove markdown code blocks if present
+     const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+     const match = cleaned.match(codeBlockRegex);
+     if (match && match[1]) {
+       cleaned = match[1].trim();
+     }
+    
+    // Try to find the valid JSON object or array
+    // Look for the first '{' or '[' and the last '}' or ']'
+    const firstBrace = cleaned.search(/[{\[]/);
+    if (firstBrace !== -1) {
+      // Find the corresponding closing character
+      const lastBrace = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']'));
+      if (lastBrace !== -1 && lastBrace > firstBrace) {
+         cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+      }
+    }
+    
+    return cleaned;
   }
 
   /**

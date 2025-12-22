@@ -5,7 +5,7 @@ import { useGameStore } from '@/stores/game';
 import { useChatStore } from '@/stores/chat';
 import NewGameWizard from './NewGameWizard.vue';
 import { gameLoop } from '@/services/gameLoop';
-import { X, Plus, Trash2, Edit2, Play, Check } from 'lucide-vue-next';
+import { X, Plus, Trash2, Edit2, Play, Check, Download, Upload } from 'lucide-vue-next';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
@@ -81,6 +81,17 @@ async function onWizardComplete(data: any) {
     authorities: data.stats.authorities || [],
     spell_cards: data.stats.spell_cards || []
   });
+
+  // 3.1 Update System Config (Difficulty)
+  if (data.difficulty) {
+      const currentSystem = gameStore.state.system;
+      gameStore.updateState({
+          system: {
+              ...currentSystem,
+              difficulty: data.difficulty
+          }
+      });
+  }
   
   // 4. Send initial message if provided (Store Start)
   // Define mapPromise outside to track background generation
@@ -97,30 +108,6 @@ async function onWizardComplete(data: any) {
                 return null;
             });
     }
-
-    // Save context for Management System
-    const newSystemState: any = {
-        ...gameStore.state.system,
-        customMap: undefined, // Will be updated when mapPromise resolves
-        management: {
-            isActive: false, 
-            isTriggered: true, 
-            context: data.initialMessage,
-            storeDescription: data.storeDescription,
-            specialGuests: [],
-            difficulty: 'normal',
-            stats: {
-                totalRevenue: 0,
-                customersServed: 0,
-                reputationGained: 0,
-                startTime: Date.now()
-            }
-        }
-    };
-
-    gameStore.updateState({
-        system: newSystemState
-    });
   }
 
   // 5. Create initial snapshot to persist the configured state
@@ -140,18 +127,66 @@ async function onWizardComplete(data: any) {
   }
 
   // 7. Handle Map Completion (Update state when ready)
-  mapPromise.then((initialMap) => {
-    if (initialMap) {
-        console.log("[SaveManager] Map generated in background, updating state...");
-        const currentSystem = gameStore.state.system;
-        gameStore.updateState({
-            system: {
-                ...currentSystem,
-                customMap: initialMap
-            }
-        });
+  if (data.storeDescription) {
+      mapPromise.then((initialMap) => {
+        if (initialMap) {
+            console.log("[SaveManager] Map generated in background, updating state...");
+            const currentSystem = gameStore.state.system;
+            gameStore.updateState({
+                system: {
+                    ...currentSystem,
+                    customMap: initialMap
+                }
+            });
+        }
+      });
+  }
+}
+
+async function handleExport(save: any) {
+  try {
+    const json = await saveStore.exportSave(save.id);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `TouhouSave_${save.name}_${dayjs().format('YYYYMMDD_HHmmss')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Export failed:', error);
+    alert('导出存档失败');
+  }
+}
+
+const fileInput = ref<HTMLInputElement | null>(null);
+
+function triggerImport() {
+  fileInput.value?.click();
+}
+
+async function handleImport(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const content = e.target?.result as string;
+      await saveStore.importSave(content);
+      alert('存档导入成功！');
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert('导入存档失败，请检查文件格式');
+    } finally {
+      // Reset input
+      if (fileInput.value) fileInput.value.value = '';
     }
-  });
+  };
+  reader.readAsText(file);
 }
 
 function onWizardCancel() {
@@ -184,6 +219,7 @@ async function saveEdit(id: number) {
 function formatTime(timestamp: number) {
   return dayjs(timestamp).fromNow();
 }
+
 </script>
 
 <template>
@@ -212,7 +248,13 @@ function formatTime(timestamp: number) {
         <div class="relative z-10 p-6 overflow-y-auto flex-1 space-y-6 custom-scrollbar bg-stone-100/50 dark:bg-stone-800/50">
           
           <!-- Create New -->
-          <div v-if="!isCreating" class="flex justify-end">
+          <div v-if="!isCreating" class="flex justify-end gap-3">
+            <button 
+              @click="triggerImport"
+              class="flex items-center gap-2 px-4 py-2.5 bg-stone-200 hover:bg-stone-300 dark:bg-stone-700 dark:hover:bg-stone-600 text-izakaya-wood dark:text-stone-200 rounded-lg transition-all shadow hover:shadow-lg hover:-translate-y-0.5 text-sm font-bold font-display"
+            >
+              <Upload class="w-4 h-4" /> 导入存档
+            </button>
             <button 
               @click="isCreating = true"
               class="flex items-center gap-2 px-5 py-2.5 bg-touhou-red hover:bg-red-700 text-white rounded-lg transition-all shadow hover:shadow-lg hover:-translate-y-0.5 text-sm font-bold font-display"
@@ -289,6 +331,15 @@ function formatTime(timestamp: number) {
               <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
                 <button 
                   v-if="editingId !== save.id"
+                  @click="handleExport(save)"
+                  class="p-2 text-izakaya-wood/40 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 rounded-lg transition-colors"
+                  title="导出存档"
+                >
+                  <Download class="w-4 h-4" />
+                </button>
+
+                <button 
+                  v-if="editingId !== save.id"
                   @click="startEdit(save)"
                   class="p-2 text-izakaya-wood/40 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                   title="重命名"
@@ -322,6 +373,14 @@ function formatTime(timestamp: number) {
           </div>
 
         </div>
+        <!-- Hidden File Input -->
+        <input 
+          type="file" 
+          ref="fileInput"
+          class="hidden" 
+          accept=".json"
+          @change="handleImport"
+        />
       </div>
     </div>
   </Teleport>

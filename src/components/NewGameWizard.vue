@@ -10,7 +10,10 @@ const mode = ref<StartMode>('preset');
 const isStoreStart = ref(false);
 
 const steps = computed(() => {
-  const baseSteps: { id: string, title: string }[] = [{ id: 'mode_select', title: '开局模式' }];
+  const baseSteps: { id: string, title: string }[] = [
+    { id: 'difficulty_select', title: '世界难度' },
+    { id: 'mode_select', title: '开局模式' }
+  ];
   
   if (isStoreStart.value) {
     baseSteps.push({ id: 'store_config', title: '店铺配置' });
@@ -43,6 +46,7 @@ const currentStep = computed(() => steps.value[currentStepIdx.value] || steps.va
 
 // Form Data
 const formData = reactive({
+  difficulty: 'normal',
   name: '',
   persona: '',
   detailedSetting: '', // For detailed JSON-like setting
@@ -279,6 +283,7 @@ function finish() {
 
     emit('complete', {
         name: formData.name,
+        difficulty: formData.difficulty,
         persona: JSON.stringify(finalPersonaObj, null, 2), // This will be stored in gameStore.player.persona
         stats: finalStats,
         initialMessage,
@@ -349,6 +354,7 @@ function finish() {
 
     emit('complete', {
       name: formData.name,
+      difficulty: formData.difficulty,
       persona: finalPersonaContent, 
       stats: finalStats,
       initialMessage,
@@ -388,6 +394,60 @@ function finish() {
       <!-- Content -->
       <div class="relative z-10 flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
         
+        <!-- Step: Difficulty Selection -->
+        <div v-if="currentStep.id === 'difficulty_select'" class="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <h3 class="text-lg font-medium text-izakaya-wood dark:text-stone-200 mb-4 flex items-center gap-2">
+            <span class="w-1 h-6 bg-touhou-red rounded-full"></span>
+            请选择世界难度
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div 
+              @click="formData.difficulty = 'gentle'"
+              class="group relative p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg flex flex-col gap-4 text-center items-center overflow-hidden"
+              :class="formData.difficulty === 'gentle' ? 'border-green-500 bg-green-500/5' : 'border-izakaya-wood/20 bg-white/40 dark:bg-stone-800/40 hover:border-green-500/50'"
+            >
+              <div class="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 bg-green-500/5 transition-opacity duration-300"></div>
+              <div class="p-4 bg-green-100 dark:bg-green-900/30 rounded-full text-green-600 dark:text-green-400 relative z-10 transition-transform group-hover:scale-110 duration-300">
+                <BookUser class="w-8 h-8" />
+              </div>
+              <div class="relative z-10">
+                <h4 class="font-bold text-lg mb-2 text-izakaya-wood dark:text-stone-200">温柔的世界</h4>
+                <p class="text-sm text-izakaya-wood/70 dark:text-stone-400">世界对你充满善意。NPC更加友好，战斗更加轻松。</p>
+              </div>
+            </div>
+
+            <div 
+              @click="formData.difficulty = 'normal'"
+              class="group relative p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg flex flex-col gap-4 text-center items-center overflow-hidden"
+              :class="formData.difficulty === 'normal' ? 'border-blue-500 bg-blue-500/5' : 'border-izakaya-wood/20 bg-white/40 dark:bg-stone-800/40 hover:border-blue-500/50'"
+            >
+              <div class="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 bg-blue-500/5 transition-opacity duration-300"></div>
+              <div class="p-4 bg-blue-100 dark:bg-blue-900/30 rounded-full text-blue-600 dark:text-blue-400 relative z-10 transition-transform group-hover:scale-110 duration-300">
+                <User class="w-8 h-8" />
+              </div>
+              <div class="relative z-10">
+                <h4 class="font-bold text-lg mb-2 text-izakaya-wood dark:text-stone-200">普通的世界</h4>
+                <p class="text-sm text-izakaya-wood/70 dark:text-stone-400">标准的幻想乡体验。一切如常，既有欢笑也有挑战。</p>
+              </div>
+            </div>
+
+            <div 
+              @click="formData.difficulty = 'cruel'"
+              class="group relative p-6 rounded-xl border-2 cursor-pointer transition-all hover:shadow-lg flex flex-col gap-4 text-center items-center overflow-hidden"
+              :class="formData.difficulty === 'cruel' ? 'border-red-600 bg-red-600/5' : 'border-izakaya-wood/20 bg-white/40 dark:bg-stone-800/40 hover:border-red-600/50'"
+            >
+              <div class="absolute inset-0 pointer-events-none opacity-0 group-hover:opacity-100 bg-red-600/5 transition-opacity duration-300"></div>
+              <div class="p-4 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400 relative z-10 transition-transform group-hover:scale-110 duration-300">
+                <Swords class="w-8 h-8" />
+              </div>
+              <div class="relative z-10">
+                <h4 class="font-bold text-lg mb-2 text-izakaya-wood dark:text-stone-200">残酷的世界</h4>
+                <p class="text-sm text-izakaya-wood/70 dark:text-stone-400">在这个充满恶意的世界里，生存本身就是一种挑战。NPC更加冷漠，战斗异常艰难。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Step 0: Mode Selection -->
         <div v-if="currentStep.id === 'mode_select'" class="space-y-6 animate-in slide-in-from-right-4 duration-300">
           <h3 class="text-lg font-medium text-izakaya-wood dark:text-stone-200 mb-4 flex items-center gap-2">

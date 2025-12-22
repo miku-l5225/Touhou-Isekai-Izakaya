@@ -117,41 +117,125 @@ export const useSaveStore = defineStore('save', () => {
   }
 
   async function deleteSave(id: number) {
-    // Prevent deleting the active save if it's the only one? 
-    // Or just switch to another one.
+    if (!id) return;
     
-    await db.transaction('rw', db.saveSlots, db.chats, db.snapshots, async () => {
+    // Delete all related data
+    await db.transaction('rw', db.saveSlots, db.chats, db.memories, db.snapshots, async () => {
+      await db.chats.where('saveSlotId').equals(id).delete();
+      await db.memories.where('saveSlotId').equals(id).delete();
+      await db.snapshots.where('saveSlotId').equals(id).delete();
       await db.saveSlots.delete(id);
-      await db.chats.where({ saveSlotId: id }).delete();
-      await db.snapshots.where({ saveSlotId: id }).delete();
     });
 
-    await loadSaves();
-
     if (currentSaveId.value === id) {
-      // Switched to another save or create new
-      if (saves.value.length > 0) {
-        const firstSave = saves.value[0];
-        if (firstSave) {
-          await switchSave(firstSave.id);
-        }
-      } else {
-        await createSave('默认存档');
-        const firstSave = saves.value[0];
-        if (firstSave) {
-          await switchSave(firstSave.id);
-        }
+      currentSaveId.value = null;
+      settingsStore.currentSaveSlotId = undefined;
+      await settingsStore.saveSettings();
+    }
+    
+    await loadSaves();
+  }
+
+  async function exportSave(id: number): Promise<string> {
+    const saveSlot = await db.saveSlots.get(id);
+    if (!saveSlot) throw new Error("Save not found");
+
+    const chats = await db.chats.where('saveSlotId').equals(id).toArray();
+    const memories = await db.memories.where('saveSlotId').equals(id).toArray();
+    const snapshots = await db.snapshots.where('saveSlotId').equals(id).toArray();
+
+    return JSON.stringify({
+      version: 1,
+      timestamp: Date.now(),
+      saveSlot: { ...saveSlot, id: undefined }, // We don't need old saveSlot ID
+      chats, // Keep IDs for mapping
+      memories,
+      snapshots
+    }, null, 2);
+  }
+
+  async function importSave(fileContent: string) {
+    try {
+      const data = JSON.parse(fileContent);
+      
+      // Basic validation
+      if (!data.saveSlot || !Array.isArray(data.chats)) {
+        throw new Error("Invalid save file format");
       }
+
+      await db.transaction('rw', db.saveSlots, db.chats, db.memories, db.snapshots, async () => {
+        // 1. Create new Save Slot
+        const newSaveId = await db.saveSlots.add({
+          ...data.saveSlot,
+          name: `${data.saveSlot.name} (导入)`,
+          lastPlayed: Date.now()
+        }) as number;
+
+        // Map for Chat IDs (Old ID -> New ID)
+        const chatIdMap = new Map<number, number>();
+
+        // 2. Import Chats
+        for (const chat of data.chats) {
+            const oldId = chat.id;
+            const newChatId = await db.chats.add({
+                ...chat,
+                id: undefined, // Let DB generate new ID
+                saveSlotId: newSaveId
+            }) as number;
+            
+            if (oldId) {
+                chatIdMap.set(oldId, newChatId);
+            }
+        }
+
+        // 3. Import Snapshots (depend on Chat IDs)
+        for (const snapshot of data.snapshots) {
+            const newChatId = snapshot.chatId ? chatIdMap.get(snapshot.chatId) : undefined;
+            
+            // If we can't map the chat ID, we might have an orphan snapshot. 
+            // We should probably still import it but warn? 
+            // Or if it's strictly linked, we assume map exists.
+            
+            // Note: snapshot.chatId is not optional in interface, but let's be safe.
+            if (snapshot.chatId && !newChatId) {
+                console.warn(`Skipping snapshot for missing chat ID ${snapshot.chatId}`);
+                continue;
+            }
+
+            await db.snapshots.add({
+                ...snapshot,
+                id: undefined,
+                saveSlotId: newSaveId,
+                chatId: newChatId || snapshot.chatId // Fallback if no mapping (shouldn't happen)
+            });
+        }
+
+        // 4. Import Memories
+        for (const memory of data.memories) {
+            await db.memories.add({
+                ...memory,
+                id: undefined,
+                saveSlotId: newSaveId
+            });
+        }
+      });
+      
+      await loadSaves();
+    } catch (e) {
+      console.error("Import failed:", e);
+      throw e;
     }
   }
 
   return {
-    currentSaveId,
     saves,
+    currentSaveId,
     init,
     createSave,
     switchSave,
     renameSave,
-    deleteSave
+    deleteSave,
+    exportSave,
+    importSave
   };
 });

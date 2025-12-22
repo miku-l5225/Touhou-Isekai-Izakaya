@@ -87,19 +87,7 @@ const LOGIC_SYSTEM_PROMPT = `
 # 变量计算规则 (Numerical Calculation Rules)
 当涉及到数值变化时，请严格遵守以下规则：
 
-1. **好感度 (Favorability)**:
-   - 范围：[-100, 100]
-   - 默认变化幅度：[-5, +2] (除非发生重大事件)
-   - 逻辑：好感度很难提升，但容易因为冒犯行为而下降。
-
-2. **服从度 (Obedience)**:
-   - 范围：[-100, 100]
-   - 默认变化幅度：[-5, +2]
-   - 逻辑：类似于好感度，通常在玩家展示权威或力量时提升。
-
-3. **声望 (Reputation)**:
-   - 范围：[-100, 100]
-   - 特性：极难变化。仅在“影响声望的重大公开事件”发生时才可变动。
+{{difficulty_rules}}
 
 4. **战斗经验 (combatExp) 与 熟练等级 (combatLevel)**:
    - 你只需计算玩家获得的“战斗经验 (combatExp)”，无需直接修改等级 (combatLevel)。等级由系统自动处理。
@@ -332,8 +320,58 @@ export class LogicService {
         }
     }
 
+    // Inject Difficulty Rules
+    const difficulty = gameState.system?.difficulty || 'normal';
+    let difficultyRules = '';
+    
+    if (difficulty === 'gentle') {
+        difficultyRules = `1. **好感度 (Favorability)**:
+   - 范围：[-100, 100]
+   - 默认变化幅度：[-2, +5] (温柔世界：好感度容易提升)
+   - 逻辑：NPC性格温和，容易对玩家产生好感。
+
+2. **服从度 (Obedience)**:
+   - 范围：[-100, 100]
+   - 默认变化幅度：[-2, +5] (温柔世界：容易获得服从)
+   - 逻辑：NPC比较顺从，容易被玩家折服。
+
+3. **声望 (Reputation)**:
+   - 范围：[-100, 100]
+   - 特性：较易获取。行侠仗义或帮助他人即可获得声望。`;
+    } else if (difficulty === 'cruel') {
+        difficultyRules = `1. **好感度 (Favorability)**:
+   - 范围：[-100, 100]
+   - 默认变化幅度：[-8, +1] (残酷世界：好感度极难提升)
+   - 逻辑：NPC冷漠且多疑，极难建立信任。
+
+2. **服从度 (Obedience)**:
+   - 范围：[-100, 100]
+   - 默认变化幅度：[-8, +1] (残酷世界：极难获得服从)
+   - 逻辑：除非展示绝对的力量碾压，否则很难让NPC服从。
+
+3. **声望 (Reputation)**:
+   - 范围：[-100, 100]
+   - 特性：极难变化。仅在发生震动幻想乡的大事件时才可能变动。`;
+    } else {
+        difficultyRules = `1. **好感度 (Favorability)**:
+   - 范围：[-100, 100]
+   - 默认变化幅度：[-5, +2] (除非发生重大事件)
+   - 逻辑：好感度很难提升，但容易因为冒犯行为而下降。
+
+2. **服从度 (Obedience)**:
+   - 范围：[-100, 100]
+   - 默认变化幅度：[-5, +2]
+   - 逻辑：类似于好感度，通常在玩家展示权威或力量时提升。
+
+3. **声望 (Reputation)**:
+   - 范围：[-100, 100]
+   - 特性：极难变化。仅在“影响声望的重大公开事件”发生时才可变动。`;
+    }
+
+    const finalSystemPrompt = LOGIC_SYSTEM_PROMPT.replace('{{difficulty_rules}}', difficultyRules);
+
     const messages = [
-      { role: 'system', content: LOGIC_SYSTEM_PROMPT },
+      { role: 'system', content: finalSystemPrompt },
       { role: 'user', content: JSON.stringify({
           current_state: {
              player: gameState.player,

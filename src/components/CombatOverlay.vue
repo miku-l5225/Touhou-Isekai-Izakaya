@@ -192,11 +192,18 @@
       <div class="absolute inset-0 z-10 overflow-hidden pointer-events-none transition-transform duration-100" :class="{ 'animate-shake': isScreenShaking }">
         
         <!-- Effect Overlay -->
-        <!-- 1. Point-based Effects (Slash / Enemy Hit / Talk / Hit) -->
-        <div v-if="activeEffect.show && !['spell', 'ultimate_impact'].includes(activeEffect.type)" 
+        <!-- 1. Point-based Effects (Slash / Enemy Hit / Talk / Hit / Single Spell) -->
+        <div v-if="activeEffect.show && !['spell_aoe', 'ultimate_impact', 'hit_aoe'].includes(activeEffect.type)" 
              class="absolute z-[60] pointer-events-none flex items-center justify-center"
              :style="{ left: activeEffect.x + 'px', top: activeEffect.y + 'px' }"
         >
+            <!-- Single Spell Effect (Focused Beam) -->
+            <div v-if="activeEffect.type === 'spell_single'" class="relative flex items-center justify-center">
+                 <div class="absolute w-[100px] h-[400px] bg-cyan-400 blur-md animate-slash mix-blend-screen origin-bottom"></div>
+                 <div class="absolute w-[200px] h-[200px] border-4 border-cyan-200 rounded-full animate-ping-fast"></div>
+                 <div class="absolute w-[150px] h-[150px] bg-white opacity-50 blur-lg animate-flash-fade"></div>
+            </div>
+
             <!-- Slash Effect (Combo) -->
             <div v-if="activeEffect.type === 'slash'" class="relative w-[300px] h-[300px]">
                 <div class="absolute inset-0 bg-white clip-shard-diag-1 animate-slash-combo-1 mix-blend-overlay"></div>
@@ -225,7 +232,7 @@
         </div>
 
         <!-- 2. Fullscreen Spell Effect (Magic Circle) -->
-        <div v-if="activeEffect.show && activeEffect.type === 'spell'" class="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none overflow-hidden">
+        <div v-if="activeEffect.show && activeEffect.type === 'spell_aoe'" class="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none overflow-hidden">
              <!-- Background Dim & Flash -->
              <div class="absolute inset-0 bg-black/40 animate-fade-in-fast backdrop-blur-[2px]"></div>
              
@@ -236,6 +243,9 @@
                 <div class="absolute inset-[-50%] animate-spin-slow opacity-30">
                     <div class="w-full h-full bg-[conic-gradient(from_0deg,transparent_0deg,purple_20deg,transparent_40deg,purple_60deg,transparent_80deg,purple_100deg,transparent_120deg,purple_140deg,transparent_160deg,purple_180deg,transparent_200deg,purple_220deg,transparent_240deg,purple_260deg,transparent_280deg,purple_300deg,transparent_320deg,purple_340deg,transparent_360deg)] opacity-20 mix-blend-screen"></div>
                 </div>
+
+                <!-- Shockwave Ring -->
+                <div class="absolute inset-0 border-[50px] border-purple-400 opacity-50 rounded-full animate-shockwave mix-blend-screen"></div>
 
                 <!-- Layer 1: Outer Runes Ring -->
                 <div class="absolute w-full h-full border-[2px] border-purple-500/40 rounded-full animate-spin-slow shadow-[0_0_30px_rgba(168,85,247,0.3)]">
@@ -277,6 +287,13 @@
             
             <!-- Extra Particles -->
             <div class="absolute inset-0 bg-texture-stardust opacity-50 animate-pulse mix-blend-screen pointer-events-none"></div>
+        </div>
+
+        <!-- 3. AOE Hit Effect (Massive Explosion) -->
+        <div v-if="activeEffect.show && activeEffect.type === 'hit_aoe'" class="fixed inset-0 z-[60] flex items-center justify-center pointer-events-none">
+             <div class="absolute inset-0 bg-red-600 opacity-20 animate-flash-fade mix-blend-overlay"></div>
+             <div class="absolute w-[120vw] h-[120vw] border-[100px] border-white rounded-full animate-shockwave opacity-80"></div>
+             <div class="absolute inset-0 bg-white opacity-40 animate-flash-out"></div>
         </div>
         
         <!-- 3. Ultimate Impact (Fullscreen Beam) -->
@@ -1234,7 +1251,7 @@ const isActing = ref(false);
 const selectionMode = ref(false);
 const pendingAction = ref<{ type: string, payload?: any } | null>(null);
 const activeEffect = ref<{ 
-    type: 'slash' | 'spell' | 'enemy' | 'hit' | 'talk' | 'ultimate_impact', 
+    type: 'slash' | 'spell' | 'spell_aoe' | 'spell_single' | 'enemy' | 'hit' | 'hit_aoe' | 'talk' | 'ultimate_impact', 
     x: number, 
     y: number, 
     show: boolean,
@@ -1626,9 +1643,11 @@ async function executeAction(attacker: Combatant, defender: UICombatant, actionN
   // Use existing service logic for calculation
   const result = calculateDamage(attacker, defender, spell);
   
-  // Apply Spell Effects (Debuffs) if any
+  // Apply Spell Effects (Debuffs or Buffs)
   if (spell && spell.buffDetails) {
-      applyBuff(defender, spell.buffDetails, 'debuff');
+      // Fix: Determine type based on spell type (buff/shield/heal -> buff, attack/debuff -> debuff)
+      const type = ['buff', 'shield', 'heal'].includes(spell.type || '') ? 'buff' : 'debuff';
+      applyBuff(defender, spell.buffDetails, type);
   }
 
   if (result.damage > 0) {
@@ -1725,6 +1744,33 @@ async function executeAction(attacker: Combatant, defender: UICombatant, actionN
 function applyBuff(target: UICombatant, buffDetails: any, type: 'buff' | 'debuff' = 'buff') {
     if (!buffDetails) return;
     
+    // Check for Immediate Effects (Shield, Instant Heal)
+    let isInstantHeal = false;
+    if (buffDetails.effects) {
+        for (const effect of buffDetails.effects) {
+            if (effect.type === 'shield') {
+                const val = Number(effect.value);
+                if (val > 0) {
+                    target.shield = (target.shield || 0) + val;
+                    updateCombatantState(target.id, { shield: target.shield });
+                    addPopup(target, val, 'buff');
+                }
+            } else if (effect.type === 'heal' && buffDetails.duration === 1) {
+                // Instant Heal
+                const val = Number(effect.value);
+                if (val > 0) {
+                    const newHp = Math.min(target.maxHp, target.hp + val);
+                    target.hp = newHp;
+                    updateCombatantState(target.id, { hp: newHp });
+                    addPopup(target, val, 'heal');
+                    isInstantHeal = true;
+                }
+            }
+        }
+    }
+    
+    if (isInstantHeal) return;
+    
     if (!target.buffs) target.buffs = [];
     
     const newBuff: Buff = {
@@ -1790,53 +1836,14 @@ async function handleAction(type: string, payload?: any) {
             
             // Apply Logic
             if (spell.type === 'shield') {
-                // Shield Logic
-                let shieldVal = spell.damage || 0;
-                // Check buffDetails for shield effect
-                if (spell.buffDetails && spell.buffDetails.effects) {
-                    const shieldEff = spell.buffDetails.effects.find(e => e.type === 'shield');
-                    if (shieldEff) shieldVal += shieldEff.value;
-                }
-                
-                if (shieldVal > 0) {
-                    player.value.shield = (player.value.shield || 0) + shieldVal;
-                    updateCombatantState(player.value.id, { shield: player.value.shield });
-                    addPopup(player.value, shieldVal, 'buff');
-                    addLog(`${player.value.name} 释放了 ${spell.name}，获得了 ${shieldVal} 点护盾！`);
-                }
+                addLog(`${player.value.name} 释放了 ${spell.name}！`);
             } else if (spell.type === 'heal') {
-                // Heal Logic
-                let healVal = 0;
-                let isInstant = false;
-                
-                if (spell.buffDetails) {
-                    // Heuristic: If duration is 1, it's instant heal. If > 1, it's HoT.
-                    if (spell.buffDetails.duration === 1) {
-                         isInstant = true;
-                         // Extract value
-                         if (spell.buffDetails.effects) {
-                             const healEff = spell.buffDetails.effects.find(e => e.type === 'heal');
-                             if (healEff) healVal += healEff.value;
-                         }
-                    }
-                }
-                
-                if (isInstant && healVal > 0) {
-                    const newHp = Math.min(player.value.maxHp, player.value.hp + healVal);
-                    player.value.hp = newHp;
-                    updateCombatantState(player.value.id, { hp: newHp });
-                    addPopup(player.value, healVal, 'heal');
-                    addLog(`${player.value.name} 释放了 ${spell.name}，恢复了 ${healVal} 点生命！`);
-                }
+                addLog(`${player.value.name} 释放了 ${spell.name}！`);
             }
             
             // Apply Buffs (if any)
             if (spell.buffDetails) {
-                 // For instant heal spells, skip adding buff to avoid double healing next turn
-                 const isInstantHeal = spell.type === 'heal' && spell.buffDetails.duration === 1;
-                 if (!isInstantHeal) {
-                     applyBuff(player.value, spell.buffDetails, 'buff');
-                 }
+                 applyBuff(player.value, spell.buffDetails, 'buff');
             }
 
             await sleep(1000);
@@ -1863,22 +1870,24 @@ async function handleAction(type: string, payload?: any) {
             updateCombatantState(player.value.id, { mp: newMp });
             
             // 1. Cast
-            audioManager.playSpellCast();
             const rect = document.body.getBoundingClientRect();
             
             if (spell.isUltimate) {
+                audioManager.playSpellCastAoE();
                 triggerEffect('ultimate_impact', rect.width * 0.5, rect.height * 0.5);
                 setTimeout(() => audioManager.playShatter(), 200);
             } else {
-                triggerEffect('spell', rect.width * 0.5, rect.height * 0.5);
+                audioManager.playSpellCastAoE();
+                triggerEffect('spell_aoe', rect.width * 0.5, rect.height * 0.5);
             }
             
             await sleep(spell.isUltimate ? 2500 : 2200);
 
             // 2. Impact
             triggerShake();
-            audioManager.playHeavyHit();
-
+            audioManager.playAoEExplosion();
+            triggerEffect('hit_aoe', rect.width * 0.5, rect.height * 0.5); // Global hit effect
+            
             // AOE Logic (Apply to all enemies)
             let anyKilled = false;
             let totalDmg = 0;
@@ -2490,16 +2499,17 @@ async function selectTarget(target: UICombatant) {
               player.value.mp = newMp;
               updateCombatantState(player.value.id, { mp: newMp });
               
-              audioManager.playSpellCast();
               const rect = document.body.getBoundingClientRect();
               
               if (spell.isUltimate) {
+                   audioManager.playSpellCastAoE();
                    triggerEffect('ultimate_impact', rect.width * 0.5, rect.height * 0.5);
                    setTimeout(() => audioManager.playShatter(), 200);
                    await sleep(2500);
                } else {
-                   triggerEffect('spell', rect.width * 0.7, rect.height * 0.3); // Target area
-                   await sleep(2200);
+                   audioManager.playSpellCastSingle();
+                   triggerEffect('spell_single', rect.width * 0.75, rect.height * 0.4); // Target area (Enemy side)
+                   await sleep(1500); // Shorter wait for single
                }
               
               triggerShake();
@@ -2774,44 +2784,67 @@ async function processAllyTurn() {
              if (targets.length === 0) continue;
 
              // 4. Execution
-             if (action === 'spell' && selectedSpell) {
-                 addLog(`${ally.name} 发动了符卡：${selectedSpell.name}！`);
-                 
-                 if (isUltimateTrigger) {
-                    updateCombatantState(ally.id, { hasUsedUltimate: true });
-                    await playUltimateAnimation(ally, selectedSpell.name);
+            if (action === 'spell' && selectedSpell) {
+                addLog(`${ally.name} 发动了符卡：${selectedSpell.name}！`);
+                
+                if (isUltimateTrigger) {
+                   updateCombatantState(ally.id, { hasUsedUltimate: true });
+                   await playUltimateAnimation(ally, selectedSpell.name);
+               } else {
+                   await playSkillAnimation(ally, selectedSpell.name);
+               }
+
+                const isSupport = ['heal', 'buff', 'shield'].includes(selectedSpell.type || '');
+                const isAoE = selectedSpell.scope === 'aoe' || targets.length > 1;
+                const rect = document.body.getBoundingClientRect();
+
+                // Cast Sound
+                if (isAoE) audioManager.playSpellCastAoE();
+                else audioManager.playSpellCastSingle();
+                
+                // Visuals
+                if (isUltimateTrigger || isAoE) {
+                    if (isSupport) {
+                        // Center on self/allies (Left side)
+                        triggerEffect('spell_aoe', rect.width * 0.25, rect.height * 0.5);
+                    } else {
+                        // Center on enemies (Right side)
+                        triggerEffect('spell_aoe', rect.width * 0.75, rect.height * 0.5);
+                    }
                 } else {
-                    await playSkillAnimation(ally, selectedSpell.name);
+                    // Single Target Effect
+                    const t = targets[0];
+                    let tx = rect.width * 0.5;
+                    let ty = rect.height * 0.5;
+                    if (t) {
+                         // Estimate position based on team
+                         // Ally attacking Enemy -> Enemy side (Right)
+                         // Ally buffing Ally -> Ally side (Left)
+                         const isTargetEnemy = !t.isPlayer && t.team === 'enemy';
+                         tx = isTargetEnemy ? rect.width * 0.75 : rect.width * 0.25;
+                         ty = rect.height * 0.6;
+                    }
+                    triggerEffect('spell_single', tx, ty);
+                }
+                
+                await sleep(isUltimateTrigger ? 1500 : (isAoE ? 1000 : 500));
+                
+                if (!isSupport) {
+                   triggerShake();
+                   if (isAoE) {
+                       audioManager.playAoEExplosion();
+                       triggerEffect('hit_aoe', rect.width * 0.5, rect.height * 0.5);
+                   } else {
+                       audioManager.playHeavyHit();
+                   }
                 }
 
-                 audioManager.playSpellCast();
-                 
-                 // Visuals
-                 const isSupport = ['heal', 'buff', 'shield'].includes(selectedSpell.type || '');
-                 const rect = document.body.getBoundingClientRect();
-                 
-                 if (isUltimateTrigger) {
-                     if (isSupport) {
-                         // Center on self/allies (Left side)
-                         triggerEffect('spell', rect.width * 0.25, rect.height * 0.5);
-                     } else {
-                         // Center on enemies (Right side)
-                         triggerEffect('spell', rect.width * 0.75, rect.height * 0.5);
-                     }
-                 }
-                 
-                 await sleep(isUltimateTrigger ? 1500 : 300);
-                 if (!isSupport) {
-                    triggerShake();
-                    audioManager.playHeavyHit();
-                 }
+                // Apply to all targets
+                for (const target of targets) {
+                    await executeAction(ally, target, selectedSpell.name, selectedSpell);
+                }
 
-                 // Apply to all targets
-                 for (const target of targets) {
-                     await executeAction(ally, target, selectedSpell.name, selectedSpell);
-                 }
-
-             } else {
+            } else {
                  // Regular Attack
                  const target = targets[0];
                  if (!target) continue;
@@ -3167,6 +3200,17 @@ function closeCombat() {
 .animate-ping-slow { animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
 .animate-fade-in-fast { animation: fadeIn 0.2s ease-out forwards; }
 .animate-scale-in-elastic { animation: scaleInElastic 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+@keyframes shockwave {
+  0% { transform: scale(0); opacity: 0.8; border-width: 50px; }
+  100% { transform: scale(2); opacity: 0; border-width: 0px; }
+}
+.animate-shockwave { animation: shockwave 1.2s ease-out forwards; }
+
+@keyframes ping-fast {
+  75%, 100% { transform: scale(1.5); opacity: 0; }
+}
+.animate-ping-fast { animation: ping-fast 0.6s cubic-bezier(0, 0, 0.2, 1) infinite; }
 
 @keyframes spin {
   from { transform: rotate(0deg); }

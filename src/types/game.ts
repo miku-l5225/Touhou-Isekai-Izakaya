@@ -131,6 +131,7 @@ export interface GameSystemState {
   promises?: PromiseState[]; // List of all promises
   pending_quest_trigger?: Quest | null; // Quest waiting for acceptance
   predicted_next_round_chars?: string[]; // Characters predicted to appear in the next round
+  difficulty?: 'gentle' | 'normal' | 'cruel';
 }
 
 export interface GameState {
@@ -175,7 +176,8 @@ export const INITIAL_GAME_STATE: GameState = {
     management: null,
     quests: [],
     promises: [],
-    pending_quest_trigger: null
+    pending_quest_trigger: null,
+    difficulty: 'normal'
   },
   flags: {}
 };
