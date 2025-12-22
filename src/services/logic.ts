@@ -69,7 +69,7 @@ const LOGIC_SYSTEM_PROMPT = `
 - **action (目前行为)**: 描述具体的动作姿态。
   - ❌ 错误: "看书", "站立"
   - ✅ 正确: "正专注于手中的魔导书，偶尔皱眉", "双手叉腰，身体微微前倾", "无力地靠在墙边喘息"
-- **clothing (衣着)**: 必须使用**短词句**（Short Term），严禁使用长句。
+- **clothing (衣着)**: **必须在每一轮逻辑处理中更新并输出**。必须使用**短词句**（Short Term），严禁使用长句。
   - ❌ 错误: "身着红白相间的巫女服，袖口有些磨损", "穿着黑色的魔法使长袍，戴着宽大的尖顶帽"
   - ✅ 正确: "红白巫女服", "黑色魔女袍", "舒适的棉衣", "深色羽织常服", "清爽的泳装"
 - **posture (姿势)**: 描述身体姿态，应与行为呼应。
@@ -153,10 +153,12 @@ const LOGIC_SYSTEM_PROMPT = `
 - 你必须仅输出原始 JSON。
 - 结构示例:
 {
-  "thinking": "1. 剧情解析: 玩家给了灵梦捐款，灵梦表现出明显的喜悦。\n2. 变量识别: 玩家金钱减少，灵梦心情变好，好感度上升，心理活动更新。\n3. 描述草拟: 心情->'喜上眉梢，眼睛发亮'; 心理->'太好了，这下此后的茶叶钱有着落了！'\n4. 数值验证: 1000円是合理的捐赠额，好感度+5符合规则。\n→ 准备输出 UPDATE_PLAYER 和 UPDATE_NPC 指令。",
+  "thinking": "1. 剧情解析: 玩家给了灵梦捐款，灵梦表现出明显的喜悦。\n2. 变量识别: 玩家金钱减少，玩家衣着确认，灵梦心情变好，好感度上升，心理活动更新，灵梦衣着确认。\n3. 描述草拟: 心情->'喜上眉梢，眼睛发亮'; 心理->'太好了，这下此后的茶叶钱有着落了！'; 灵梦衣着->'红白巫女服'; 玩家衣着->'现代常服'\n4. 数值验证: 1000円是合理的捐赠额，好感度+5符合规则。\n→ 准备输出 UPDATE_PLAYER 和 UPDATE_NPC 指令。",
   "actions": [
     { "type": "UPDATE_PLAYER", "field": "money", "op": "subtract", "value": 1000 },
+    { "type": "UPDATE_PLAYER", "field": "clothing", "op": "set", "value": "现代常服" },
     { "type": "UPDATE_NPC", "npcId": "reimu", "field": "mood", "op": "set", "value": "喜上眉梢，眼睛发亮" },
+    { "type": "UPDATE_NPC", "npcId": "reimu", "field": "clothing", "op": "set", "value": "红白巫女服" },
     { "type": "UPDATE_NPC", "npcId": "reimu", "field": "favorability", "op": "add", "value": 5 },
     { "type": "UPDATE_NPC", "npcId": "reimu", "field": "inner_thought", "op": "set", "value": "太好了，这下此后的茶叶钱有着落了！" }
   ],

@@ -111,13 +111,13 @@ export function calculateDamage(
   
   // 0. Handle Non-Attack Types
   if (spell) {
-    if (spell.type === 'buff') {
+    if (['buff', 'shield', 'heal'].includes(spell.type || '')) {
       return {
         damage: 0,
-        heal: 0,
+        heal: spell.type === 'heal' ? (spell.damage || 0) : 0,
         isCrit: false,
         isHit: true,
-        description: `${attacker.name} 使用了【${spell.name}】，${spell.description || '施加了增益效果'}。`
+        description: `${attacker.name} 使用了【${spell.name}】，${spell.description || '施加了支援效果'}。`
       };
     }
   }

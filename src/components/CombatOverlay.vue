@@ -407,7 +407,7 @@
               </div>
               
               <!-- Player Status HUD -->
-              <div v-if="player" class="absolute -right-20 top-1/2 flex flex-col gap-3 transform skew-x-[-10deg] pointer-events-auto">
+              <div v-if="player" class="absolute -right-20 top-[46%] flex flex-col gap-3 transform skew-x-[-10deg] pointer-events-auto">
                  <!-- HP Bar Wrapper -->
                  <div class="relative transition-transform hover:scale-110 group">
                     <div 
@@ -1147,37 +1147,6 @@ const isPending = computed(() => !!combatState.value?.isPending);
 const isActive = computed(() => !!combatState.value?.isActive);
 const showOverlay = computed(() => !!combatState.value && (isActive.value || isPending.value));
 
-// --- Ally Stack Management ---
-const activeAllyId = ref<string | null>(null);
-
-const sortedAllies = computed(() => {
-    if (!allies.value || allies.value.length === 0) return [];
-    
-    // Sort initially by name if no active ID is set
-    let list = [...allies.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
-    
-    // Ensure activeAllyId is valid
-    if (!activeAllyId.value && list.length > 0) {
-        activeAllyId.value = list[0]?.id || null;
-    }
-    
-    // Reorder: Active ally first
-    const activeIndex = list.findIndex(a => a.id === activeAllyId.value);
-    if (activeIndex > -1) {
-        const [active] = list.splice(activeIndex, 1);
-        if (active) list.unshift(active);
-    } else if (list.length > 0) {
-        activeAllyId.value = list[0]?.id || null;
-    }
-    
-    return list;
-});
-
-function activateAlly(id: string) {
-    activeAllyId.value = id;
-    audioManager.playClick();
-}
-
 // --- Interfaces for UI ---
 interface CombatLog {
   id: number;
@@ -1193,16 +1162,11 @@ interface Popup {
 
 interface UICombatant extends Combatant {
   popups: Popup[];
-  // Maintain refs for compatibility with template
 }
 
 // --- Local State for UI/Animations ---
-// We map the store combatants to local reactive objects to handle UI-only state (popups)
-// But we must ensure they stay in sync. 
-// Actually, it's easier to create a local map of ID -> Popups and join them in the computed.
 const popupMap = reactive<Record<string, Popup[]>>({});
 
-// Initialize popup array for a combatant if not exists
 const getPopups = (id: string) => {
     if (!popupMap[id]) popupMap[id] = [];
     return popupMap[id];
@@ -1226,16 +1190,68 @@ const player = computed(() => {
     const p = combatState.value?.combatants.find(c => c.isPlayer);
     if (!p) return null;
     
-    // Calculate Effective Stats using shared logic (Includes Level scaling)
     const stats = getEffectiveStats(p);
 
     return {
         ...p,
         buffs: p.buffs || [],
-        dodgeRate: stats.dodgeRate, // Override for UI display
+        dodgeRate: stats.dodgeRate,
         popups: getPopups(p.id)
     } as UICombatant;
 });
+
+// --- Ally Stack Management ---
+const activeAllyId = ref<string | null>(null);
+
+// Watch allies to maintain a valid activeAllyId and handle auto-switching when pinned ally dies
+watch(allies, (newAllies) => {
+    if (!newAllies || newAllies.length === 0) {
+        activeAllyId.value = null;
+        return;
+    }
+
+    // If no active ID, set one
+    if (!activeAllyId.value) {
+        const firstAlive = newAllies.find(a => a.hp > 0);
+        activeAllyId.value = firstAlive ? firstAlive.id : (newAllies[0]?.id || null);
+        return;
+    }
+
+    // If currently pinned ally is dead, check if we should auto-switch to an alive one
+    const currentActive = newAllies.find(a => a.id === activeAllyId.value);
+    if (currentActive && currentActive.hp <= 0) {
+        const firstAlive = newAllies.find(a => a.hp > 0);
+        // Only auto-switch if there is at least one alive ally to switch to
+        if (firstAlive && firstAlive.id !== activeAllyId.value) {
+            activeAllyId.value = firstAlive.id;
+        }
+    }
+}, { immediate: true, deep: true });
+
+const sortedAllies = computed(() => {
+    if (!allies.value || allies.value.length === 0) return [];
+    
+    // Sort initially: Alive first, then by name
+    let list = [...allies.value].sort((a, b) => {
+        if (a.hp > 0 && b.hp <= 0) return -1;
+        if (a.hp <= 0 && b.hp > 0) return 1;
+        return a.name.localeCompare(b.name, 'zh-CN');
+    });
+    
+    // Reorder: Active ally first
+    const activeIndex = list.findIndex(a => a.id === activeAllyId.value);
+    if (activeIndex > -1) {
+        const [active] = list.splice(activeIndex, 1);
+        if (active) list.unshift(active);
+    }
+    
+    return list;
+});
+
+function activateAlly(id: string) {
+    activeAllyId.value = id;
+    audioManager.playClick();
+}
 
 const canAttack = computed(() => {
     if (isActing.value) return false;
@@ -1850,8 +1866,8 @@ async function handleAction(type: string, payload?: any) {
      if (!player.value) return;
      
      if (player.value.mp >= spell.cost) {
-        // Special Case: Self-Buff / Shield / Heal (Immediate Execution)
-        if (spell.type === 'buff' || spell.type === 'shield' || spell.type === 'heal') {
+        // Special Case: Self-Buff / Shield / Heal (Immediate Execution) - Non-AOE only
+        if ((spell.type === 'buff' || spell.type === 'shield' || spell.type === 'heal') && spell.scope !== 'aoe') {
             isActing.value = true;
             currentMenu.value = 'main';
 
@@ -1933,62 +1949,114 @@ async function handleAction(type: string, payload?: any) {
             audioManager.playAoEExplosion();
             triggerEffect('hit_aoe', rect.width * 0.5, rect.height * 0.5); // Global hit effect
             
-            // AOE Logic (Apply to all enemies)
+            // AOE Logic
             let anyKilled = false;
             let totalDmg = 0;
-            
-            for (const enemy of enemies.value) {
-               if (enemy.hp > 0) {
-                   const result = calculateDamage(player.value!, enemy, spell);
-                   
-                   if (enemy.shield && enemy.shield > 0) {
-                       enemy.shield -= result.damage;
-                       updateCombatantState(enemy.id, { shield: enemy.shield });
-                       addPopup(enemy, result.damage, 'buff');
-                       
-                       if (enemy.shield <= 0) {
-                           addLog(`${player.value.name} ${spell.name}，击碎了 ${enemy.name} 的护盾！`);
-                           audioManager.playShatter();
-                       }
-                   } else {
-                       const newHp = Math.max(0, enemy.hp - result.damage);
-                       enemy.hp = newHp;
-                       updateCombatantState(enemy.id, { hp: newHp });
-                       
-                       if (result.damage > 0) {
-                       addPopup(enemy, result.damage, 'damage');
-                       
-                       // Hit Spark for AOE
-                       // Randomize slightly on the right side
-                       const rX = rect.width * (0.6 + Math.random() * 0.3);
-                       const rY = rect.height * (0.3 + Math.random() * 0.4);
-                       triggerEffect('hit', rX, rY);
-                       
-                   } else if (!spell.buffDetails) {
-                           addPopup(enemy, 'MISS', 'damage');
-                       }
-                       
-                       if (enemy.hp <= 0) anyKilled = true;
-                   }
-                   totalDmg += result.damage;
-
-                   // Apply Debuffs (if any)
-                   if (spell.buffDetails) {
-                       applyBuff(enemy, spell.buffDetails, 'debuff');
-                   }
-               }
-            }
-
             let logMsg = `${player.value.name} 释放了符卡 ${spell.name}`;
-            if (totalDmg > 0) {
-                logMsg += `，对所有敌方单位造成了 ${totalDmg} 点总伤害`;
+
+            const type = (spell.type || '').toLowerCase();
+            let isSupport = ['buff', 'heal', 'shield'].includes(type);
+
+            // Heuristic: If labeled 'attack' (default) but has 0 damage and support-like properties, treat as support
+            if (!isSupport && (type === 'attack' || !type) && spell.damage <= 0) {
+                 // 1. Name check
+                 if (/治愈|恢复|回复|护盾|祝福|支援|祈祷|守护|Heal|Shield|Buff|Support/i.test(spell.name)) {
+                     isSupport = true;
+                 }
+                 // 2. Effect check (if has buffDetails)
+                 else if (spell.buffDetails && spell.buffDetails.effects) {
+                     const hasSupportEffect = spell.buffDetails.effects.some(e => 
+                         ['heal', 'shield', 'damage_reduction', 'dodge_mod'].includes(e.type)
+                     );
+                     if (hasSupportEffect) isSupport = true;
+                 }
+                 // 3. Direct Heal check (no buffDetails but type='heal' - handled by first check, but what if type is missing?)
+                 // If damage is 0 and no buffDetails, it does nothing anyway unless type is 'heal'
             }
-            if (spell.buffDetails) {
-                logMsg += `，并附加了【${spell.buffDetails.name}】`;
+
+            if (isSupport) {
+                // Target: Player + Allies
+                const targets = [];
+                if (player.value) targets.push(player.value);
+                if (allies.value) targets.push(...allies.value);
+                
+                let effectName = '';
+                
+                for (const target of targets) {
+                    if (target.hp <= 0) continue;
+                    
+                    if (spell.buffDetails) {
+                         applyBuff(target, spell.buffDetails, 'buff');
+                         effectName = spell.buffDetails.name;
+                    } else if (type === 'heal' && spell.damage > 0) {
+                         // Direct heal without buffDetails
+                         const healAmount = spell.damage; 
+                         const newHp = Math.min(target.maxHp, target.hp + healAmount);
+                         target.hp = newHp;
+                         updateCombatantState(target.id, { hp: newHp });
+                         addPopup(target, healAmount, 'heal');
+                    }
+                }
+                
+                if (effectName) {
+                    logMsg += `，为全员附加了【${effectName}】`;
+                } else {
+                    logMsg += `，支援了全员`;
+                }
+            } else {
+                // Target: Enemies
+                for (const enemy of enemies.value) {
+                   if (enemy.hp > 0) {
+                       const result = calculateDamage(player.value!, enemy, spell);
+                       
+                       if (enemy.shield && enemy.shield > 0) {
+                           enemy.shield -= result.damage;
+                           updateCombatantState(enemy.id, { shield: enemy.shield });
+                           addPopup(enemy, result.damage, 'buff');
+                           
+                           if (enemy.shield <= 0) {
+                               addLog(`${player.value.name} ${spell.name}，击碎了 ${enemy.name} 的护盾！`);
+                               audioManager.playShatter();
+                           }
+                       } else {
+                           const newHp = Math.max(0, enemy.hp - result.damage);
+                           enemy.hp = newHp;
+                           updateCombatantState(enemy.id, { hp: newHp });
+                           
+                           if (result.damage > 0) {
+                               addPopup(enemy, result.damage, 'damage');
+                               
+                               // Hit Spark for AOE
+                               const rX = rect.width * (0.6 + Math.random() * 0.3);
+                               const rY = rect.height * (0.3 + Math.random() * 0.4);
+                               triggerEffect('hit', rX, rY);
+                               
+                           } else if (!spell.buffDetails) {
+                               addPopup(enemy, 'MISS', 'damage');
+                           }
+                           
+                           if (enemy.hp <= 0) anyKilled = true;
+                       }
+                       totalDmg += result.damage;
+
+                       // Apply Debuffs (if any)
+                       if (spell.buffDetails) {
+                           applyBuff(enemy, spell.buffDetails, 'debuff');
+                       }
+                   }
+                }
+
+                if (totalDmg > 0) {
+                    logMsg += `，对所有敌方单位造成了 ${totalDmg} 点总伤害`;
+                }
+                if (spell.buffDetails) {
+                    logMsg += `，并附加了【${spell.buffDetails.name}】`;
+                }
+                if (totalDmg === 0 && !spell.buffDetails) {
+                    logMsg += `，但似乎没有明显效果`;
+                }
             }
-            if (totalDmg === 0 && !spell.buffDetails) {
-                logMsg += `，但似乎没有明显效果`;
-            }
+            
             logMsg += "！";
             addLog(logMsg);
             

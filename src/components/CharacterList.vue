@@ -153,9 +153,29 @@ function getAvatarImage(name: string) {
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-sm font-display font-bold text-izakaya-wood truncate group-hover:text-touhou-red transition-colors">{{ npc.name || '未知角色' }}</div>
-            <div class="text-xs text-izakaya-wood/60 truncate flex gap-2 mt-0.5">
-                <span v-if="npc.posture" class="bg-izakaya-wood/5 px-1.5 py-0.5 rounded text-[10px]">{{ npc.posture }}</span>
-                <span v-if="npc.mood" class="bg-izakaya-wood/5 px-1.5 py-0.5 rounded text-[10px]">{{ npc.mood }}</span>
+            <!-- Scrolling Status Ticker -->
+            <div class="mt-0.5 overflow-hidden relative h-5 mask-fade-edges">
+              <div class="flex gap-4 whitespace-nowrap marquee-content" :class="{'animate-marquee': (npc.action || npc.posture)}">
+                <div class="flex gap-2 items-center">
+                  <span v-if="npc.action" class="bg-touhou-red/5 text-touhou-red/80 px-1.5 py-0.5 rounded text-[10px] border border-touhou-red/10 flex items-center gap-1 shadow-sm">
+                    <span class="w-1 h-1 rounded-full bg-touhou-red/40 animate-pulse"></span>
+                    {{ npc.action }}
+                  </span>
+                  <span v-if="npc.posture" class="bg-blue-500/5 text-blue-600/70 px-1.5 py-0.5 rounded text-[10px] border border-blue-500/10 flex items-center gap-1 shadow-sm">
+                    {{ npc.posture }}
+                  </span>
+                </div>
+                <!-- Duplicate for seamless loop -->
+                <div v-if="npc.action || npc.posture" class="flex gap-2 items-center">
+                  <span v-if="npc.action" class="bg-touhou-red/5 text-touhou-red/80 px-1.5 py-0.5 rounded text-[10px] border border-touhou-red/10 flex items-center gap-1">
+                    <span class="w-1 h-1 rounded-full bg-touhou-red/40 animate-pulse"></span>
+                    {{ npc.action }}
+                  </span>
+                  <span v-if="npc.posture" class="bg-blue-500/5 text-blue-600/70 px-1.5 py-0.5 rounded text-[10px] border border-blue-500/10 flex items-center gap-1">
+                    {{ npc.posture }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -283,3 +303,40 @@ function getAvatarImage(name: string) {
 
   </div>
 </template>
+
+<style scoped>
+.marquee-content {
+  width: max-content;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+.group:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+.mask-fade-edges {
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(139, 69, 19, 0.1);
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 69, 19, 0.2);
+}
+</style>
