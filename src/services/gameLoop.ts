@@ -120,12 +120,9 @@ class GameLoopService {
       }
 
       const openai = new OpenAI({
-        baseURL: window.location.origin + '/api/spoof',
+        baseURL: chatConfig.baseUrl,
         apiKey: chatConfig.apiKey,
-        dangerouslyAllowBrowser: true,
-        defaultHeaders: {
-          'X-Target-Url': chatConfig.baseUrl
-        }
+        dangerouslyAllowBrowser: true
       });
 
       const completionOptions = {

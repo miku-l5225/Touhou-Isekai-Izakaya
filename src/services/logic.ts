@@ -301,12 +301,9 @@ export class LogicService {
     }
 
     const openai = new OpenAI({
-      baseURL: window.location.origin + '/api/spoof',
+      baseURL: config.baseUrl,
       apiKey: config.apiKey,
-      dangerouslyAllowBrowser: true,
-      defaultHeaders: {
-        'X-Target-Url': config.baseUrl
-      }
+      dangerouslyAllowBrowser: true
     });
 
     // Heuristic: Scan story for NPC names to include them in context

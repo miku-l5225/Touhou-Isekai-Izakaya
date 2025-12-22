@@ -6,6 +6,9 @@ import { audioManager } from '@/services/audio';
 import { Users, X } from 'lucide-vue-next';
 import type { NPCStatus } from '@/types/game';
 
+// Import avatar images
+const avatarImages = import.meta.glob('@/assets/images/head/*.png', { eager: true, query: '?url', import: 'default' });
+
 const gameStore = useGameStore();
 const characterStore = useCharacterStore();
 const systemState = computed(() => gameStore.state.system);
@@ -75,6 +78,39 @@ function getAvatarColor(name: string) {
   return colors[Math.abs(hash) % colors.length];
 }
 
+function getAvatarImage(name: string) {
+  if (!name) return undefined;
+  
+  // Normalize keys to be safe
+  const normalizedKeys = Object.keys(avatarImages);
+
+  // 1. Try exact match with constructed path
+  const directKey = `/src/assets/images/head/${name}_头像.png`;
+  if (avatarImages[directKey]) return avatarImages[directKey] as string;
+
+  // 2. Fuzzy match: Check if any available image matches the name partially
+  for (const path of normalizedKeys) {
+      // Extract core name from path (e.g. "灵梦" from ".../灵梦_头像.png")
+      // Handle both forward and backward slashes just in case
+      const fileName = path.split('/').pop()?.split('\\').pop(); // Get filename
+      if (!fileName) continue;
+      
+      // Match pattern: {Name}_头像.png
+      const match = fileName.match(/^(.+)_头像\.png$/);
+      if (match && match[1]) {
+          const coreName = match[1]; // "灵梦"
+          
+          // Check if NPC name contains the core name (e.g. "博丽灵梦" contains "灵梦")
+          // OR if core name contains NPC name
+          if (name.includes(coreName) || coreName.includes(name)) {
+              return avatarImages[path] as string;
+          }
+      }
+  }
+  
+  return undefined;
+}
+
 
 </script>
 
@@ -100,8 +136,20 @@ function getAvatarColor(name: string) {
         class="group p-2 hover:bg-white/60 rounded cursor-pointer border border-transparent hover:border-touhou-red/20 transition-all duration-200 hover:shadow-sm hover:-translate-x-[-2px]"
       >
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 shadow-sm border border-white/20 transition-transform group-hover:scale-110" :class="getAvatarColor(npc.name)">
+          <div class="relative w-10 h-10 shrink-0 transition-transform duration-200 group-hover:scale-110">
+            <img 
+               v-if="getAvatarImage(npc.name)" 
+               :src="getAvatarImage(npc.name)" 
+               class="w-full h-full rounded-full object-cover shadow-sm border border-white/20 bg-white/10"
+               :alt="npc.name"
+             />
+            <div 
+              v-else
+              class="w-full h-full rounded-full flex items-center justify-center text-xs font-bold shadow-sm border border-white/20" 
+              :class="getAvatarColor(npc.name)"
+            >
              {{ npc.name ? npc.name.substring(0, 1) : '?' }}
+            </div>
           </div>
           <div class="min-w-0 flex-1">
             <div class="text-sm font-display font-bold text-izakaya-wood truncate group-hover:text-touhou-red transition-colors">{{ npc.name || '未知角色' }}</div>
@@ -132,8 +180,20 @@ function getAvatarColor(name: string) {
           
           <div class="flex-1 overflow-y-auto p-6 space-y-6 relative z-10 custom-scrollbar">
               <div class="flex justify-center">
-                   <div class="w-24 h-24 rounded-full flex items-center justify-center text-3xl font-bold shadow-[0_0_15px_rgba(0,0,0,0.1)] border-4 border-white/50" :class="getAvatarColor(selectedNPC.name)">
-                      {{ selectedNPC.name ? selectedNPC.name.substring(0, 1) : '?' }}
+                   <div class="w-24 h-24 rounded-full shadow-[0_0_15px_rgba(0,0,0,0.1)] border-4 border-white/50 overflow-hidden bg-white/10">
+                      <img 
+                        v-if="getAvatarImage(selectedNPC.name)" 
+                        :src="getAvatarImage(selectedNPC.name)" 
+                        class="w-full h-full object-cover"
+                        :alt="selectedNPC.name"
+                      />
+                      <div 
+                        v-else 
+                        class="w-full h-full flex items-center justify-center text-3xl font-bold" 
+                        :class="getAvatarColor(selectedNPC.name)"
+                      >
+                         {{ selectedNPC.name ? selectedNPC.name.substring(0, 1) : '?' }}
+                      </div>
                    </div>
               </div>
 

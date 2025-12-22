@@ -112,6 +112,14 @@ html.theme-eye-protection {
     repeating-linear-gradient(-60deg, rgba(141, 110, 99, 0.05) 0 1px, transparent 1px 18px);
 }
 
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden; /* Ensure no scrollbars on root elements */
+}
+
 body {
   @apply text-ink bg-izakaya-bg font-sans-body;
   background-image: var(--bg-pattern-asanoha);
