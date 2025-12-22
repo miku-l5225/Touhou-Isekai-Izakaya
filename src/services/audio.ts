@@ -481,7 +481,7 @@ class AudioManager {
     const t = this.ctx.currentTime;
 
     // Fast, high-pitched shimmer
-    [660, 880].forEach((freq, i) => {
+    [660, 880].forEach((freq) => {
         const osc = this.ctx!.createOscillator();
         const gain = this.ctx!.createGain();
         
