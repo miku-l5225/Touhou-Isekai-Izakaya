@@ -9,18 +9,8 @@
         <button @click="closeGame" class="close-btn">关闭 (Debug)</button>
       </div>
 
-      <!-- Floor Switcher -->
-      <div class="floor-switcher" v-if="availableFloors.length > 1">
-        <button 
-            v-for="floor in availableFloors" 
-            :key="floor"
-            class="floor-btn"
-            :class="{ active: currentFloor === floor }"
-            @click="switchFloor(floor)"
-        >
-            {{ floor }}F
-        </button>
-      </div>
+      <!-- Floor Switcher (Removed) -->
+
 
       <!-- Money Display -->
       <div class="money-display">
@@ -194,8 +184,6 @@ const evaluationResult = ref<{
 const showEvaluation = ref(false);
 let scene: IzakayaScene | null = null;
 const isGeneratingMap = ref(false);
-const availableFloors = ref<number[]>([1]);
-const currentFloor = ref(1);
 
 const revenue = ref(0);
 // Inventory State
@@ -218,12 +206,7 @@ const activeCookingCustomer = ref<{ id: string, name: string, requirements: stri
 
 const emit = defineEmits(['close']);
 
-const switchFloor = (floor: number) => {
-    if (scene) {
-        scene.switchFloor(floor);
-        currentFloor.value = floor;
-    }
-};
+
 
 const getStackTransform = (index: number, id: string) => {
     if (expandedOrderId.value === id) {
@@ -551,10 +534,6 @@ const handleCookingClose = () => {
     showCooking.value = false;
 };
 
-const handleFloorChange = (e: Event) => {
-    currentFloor.value = (e as CustomEvent).detail.floor;
-};
-
 const initScene = (mapData: any) => {
     if (!canvasRef.value) return;
 
@@ -568,31 +547,12 @@ const initScene = (mapData: any) => {
         canvasRef.value.removeEventListener('izakaya-customer-interact', handleCustomerInteract);
         canvasRef.value.removeEventListener('izakaya-order-update', handleOrderUpdate);
         canvasRef.value.removeEventListener('izakaya-revenue', handleRevenue);
-        canvasRef.value.removeEventListener('izakaya-floor-change', handleFloorChange);
     }
 
     scene = new IzakayaScene(
         canvasRef.value, 
-        mapData?.layout,
-        mapData?.floors
+        mapData?.layout
     );
-
-    // Initialize floors list
-    if (mapData?.floors && Object.keys(mapData.floors).length > 0) {
-        console.log("[IzakayaGame] Multi-floor data detected:", Object.keys(mapData.floors));
-        const floors = Object.keys(mapData.floors).map(k => parseInt(k));
-        // Ensure Floor 1 is included (it comes from mapData.layout)
-        if (!floors.includes(1)) {
-            floors.push(1);
-        }
-        availableFloors.value = floors.sort((a, b) => a - b);
-    } else {
-        availableFloors.value = [1];
-    }
-    // Ensure current floor is valid
-    if (!availableFloors.value.includes(currentFloor.value)) {
-        currentFloor.value = availableFloors.value[0] || 1;
-    }
 
     scene.start();
     console.log("[IzakayaGame] Scene started.");
@@ -601,7 +561,6 @@ const initScene = (mapData: any) => {
     canvasRef.value.addEventListener('izakaya-customer-interact', handleCustomerInteract);
     canvasRef.value.addEventListener('izakaya-order-update', handleOrderUpdate);
     canvasRef.value.addEventListener('izakaya-revenue', handleRevenue);
-    canvasRef.value.addEventListener('izakaya-floor-change', handleFloorChange);
 };
 
 // Watch for map updates
@@ -689,7 +648,6 @@ onUnmounted(() => {
     canvasRef.value.removeEventListener('izakaya-customer-interact', handleCustomerInteract);
     canvasRef.value.removeEventListener('izakaya-order-update', handleOrderUpdate);
     canvasRef.value.removeEventListener('izakaya-revenue', handleRevenue);
-    canvasRef.value.removeEventListener('izakaya-floor-change', handleFloorChange);
   }
 });
 
@@ -744,39 +702,7 @@ canvas {
 }
 
 /* Floor Switcher */
-.floor-switcher {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    pointer-events: auto;
-}
-
-.floor-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px solid #555;
-    color: #aaa;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.floor-btn.active {
-    background: #FF5252;
-    border-color: #ff8a80;
-    color: white;
-    transform: scale(1.1);
-}
-
-.floor-btn:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-}
+/* Removed */
 
 /* Money Display */
 .money-display {

@@ -2713,7 +2713,7 @@ function processTurnStart() {
         updateCombatantState(player.value.id, { actionPoints: 2 });
     }
 
-    const allCombatants = [player.value, ...enemies.value].filter(c => c !== null) as UICombatant[];
+    const allCombatants = [player.value, ...allies.value, ...enemies.value].filter(c => c !== null) as UICombatant[];
     
     for (const c of allCombatants) {
         if (!c.buffs || c.buffs.length === 0) continue;

@@ -1,4 +1,7 @@
 import type { PowerLevel, Combatant, SpellCard } from '@/types/combat';
+import { generateCompletion } from '@/services/llm';
+import { useCharacterStore } from '@/stores/character';
+import { useGameStore } from '@/stores/game';
 
 // 1. Power Level Base Damage Configuration
 const POWER_LEVEL_DAMAGE: Record<PowerLevel, number> = {
@@ -223,9 +226,29 @@ export function calculateDamage(
   // Apply Defense/Damage Reduction Buffs
   finalDamage *= defStats.defMod;
 
-  // Ally Vulnerability: Allies take 2.5x damage
+  // Ally Vulnerability: Allies take extra damage based on favorability
+  // Favorability <= 0: 2.5x (Max Vulnerability)
+  // Favorability >= 100: 1.0x (No Vulnerability)
   if (!defender.isPlayer && defender.team === 'player') {
-      finalDamage *= 2.5;
+      let multiplier = 2.5;
+      try {
+          const gameStore = useGameStore();
+          const npc = gameStore.state.npcs[defender.id];
+          if (npc) {
+              const fav = npc.favorability || 0;
+              if (fav >= 100) {
+                  multiplier = 1.0;
+              } else if (fav <= 0) {
+                  multiplier = 2.5;
+              } else {
+                  // Linear interpolation: 0 -> 2.5, 100 -> 1.0
+                  multiplier = 2.5 - (fav / 100) * 1.5;
+              }
+          }
+      } catch (e) {
+          // Ignore
+      }
+      finalDamage *= multiplier;
   }
 
   // --- World Difficulty Correction ---
@@ -286,10 +309,6 @@ export function calculateDamage(
     description: description
   };
 }
-
-import { generateCompletion } from '@/services/llm';
-import { useCharacterStore } from '@/stores/character';
-import { useGameStore } from '@/stores/game';
 
 export interface PersuasionEffect {
   target: 'enemy' | 'player' | 'all_enemies' | 'ally' | 'all_allies';

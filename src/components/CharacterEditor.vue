@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useCharacterStore } from '@/stores/character';
 import { type CharacterCard } from '@/db';
-import { Folder, FileText, Plus, Trash2, Save, X, Edit2 } from 'lucide-vue-next';
+import { Folder, FileText, Plus, Trash2, Save, X, Edit2, Lock } from 'lucide-vue-next';
 import { useConfirm } from '@/utils/confirm';
 
 const props = defineProps<{
@@ -54,6 +54,10 @@ const filteredCharacters = computed(() => {
     return charStore.characters;
   }
   return charStore.characters.filter(c => (c.category || '未分类') === selectedCategory.value);
+});
+
+const isTypeDisabled = computed(() => {
+  return formData.value.type === 'spell_card' || formData.value.type === 'other';
 });
 
 onMounted(async () => {
@@ -199,7 +203,19 @@ function removeTag(index: number) {
                 : 'hover:bg-white dark:hover:bg-stone-700 text-izakaya-wood dark:text-stone-300 hover:border-izakaya-wood/10'"
             >
               <div class="w-2.5 h-2.5 rounded-full transition-colors" :class="selectedCharId === char.uuid ? 'bg-touhou-red scale-110' : 'bg-stone-300 dark:bg-stone-600 group-hover:bg-touhou-red/50'"></div>
-              <span class="font-bold truncate">{{ char.name }}</span>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="font-bold truncate">{{ char.name }}</span>
+                  <Lock v-if="char.type === 'spell_card' || char.type === 'other'" class="w-3 h-3 text-amber-500 flex-shrink-0" />
+                </div>
+                <div class="text-[10px] opacity-50 flex items-center gap-1 mt-0.5">
+                  <span v-if="char.type === 'spell_card'">符卡</span>
+                  <span v-else-if="char.type === 'other'">其他</span>
+                  <span v-else>角色</span>
+                  <span>·</span>
+                  <span class="truncate">{{ char.category || '未分类' }}</span>
+                </div>
+              </div>
             </button>
 
             <button 
@@ -221,31 +237,60 @@ function removeTag(index: number) {
                 正在编辑: <span class="font-bold text-izakaya-wood dark:text-stone-200">{{ formData.name }}</span>
               </span>
               <div class="flex items-center gap-3">
-                <button @click="handleDelete" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors" title="删除">
+                <button 
+                  @click="handleDelete" 
+                  :disabled="isTypeDisabled"
+                  class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed" 
+                  title="删除"
+                >
                   <Trash2 class="w-5 h-5" />
                 </button>
-                <button @click="handleSave" class="px-5 py-2 bg-touhou-red hover:bg-red-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow hover:shadow-lg transition-all transform hover:-translate-y-0.5">
-                  <Save class="w-4 h-4" /> 保存
+                <button 
+                  @click="handleSave" 
+                  :disabled="isTypeDisabled"
+                  class="px-5 py-2 bg-touhou-red hover:bg-red-700 text-white rounded-lg text-sm font-bold flex items-center gap-2 shadow hover:shadow-lg transition-all transform hover:-translate-y-0.5 disabled:bg-stone-400 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none"
+                >
+                  <Save v-if="!isTypeDisabled" class="w-4 h-4" />
+                  <Lock v-else class="w-4 h-4" />
+                  {{ isTypeDisabled ? '编辑已锁定' : '保存' }}
                 </button>
               </div>
             </div>
 
             <!-- Form -->
-            <div class="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
+            <div class="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar relative">
               
+              <!-- Locked Alert -->
+              <div v-if="isTypeDisabled" class="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-400 flex-shrink-0">
+                  <Lock class="w-5 h-5" />
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-sm font-bold text-amber-800 dark:text-amber-300">该类型的编辑功能已暂时关闭</h4>
+                  <p class="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">目前仅支持“角色 (Character)”类型的条目编辑。符卡和其他类型的条目现在处于只读状态。</p>
+                </div>
+              </div>
+
               <!-- Type Selector -->
               <div>
-                 <label class="block text-sm font-bold text-izakaya-wood dark:text-stone-300 mb-2">条目类型</label>
+                 <div class="flex items-center justify-between mb-2">
+                    <label class="block text-sm font-bold text-izakaya-wood dark:text-stone-300">条目类型</label>
+                    <span v-if="isTypeDisabled" class="text-[10px] font-bold px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded flex items-center gap-1 border border-amber-200 dark:border-amber-800/50">
+                       <Lock class="w-3 h-3" /> 暂时关闭该类型的编辑功能
+                    </span>
+                 </div>
                  <div class="flex rounded-lg shadow-sm overflow-hidden border border-izakaya-wood/20">
                     <button 
                       v-for="t in ['character', 'spell_card', 'other']" 
                       :key="t"
                       @click="formData.type = t as any"
-                      class="flex-1 px-4 py-2.5 text-sm font-bold transition-colors focus:outline-none"
+                      :disabled="(t === 'spell_card' || t === 'other') || (isTypeDisabled && formData.type !== t)"
+                      class="flex-1 px-4 py-2.5 text-sm font-bold transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       :class="formData.type === t 
                         ? 'bg-touhou-red text-white' 
                         : 'bg-white dark:bg-stone-800 text-izakaya-wood dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 border-r last:border-r-0 border-izakaya-wood/10'"
                     >
+                      <Lock v-if="t === 'spell_card' || t === 'other'" class="w-3 h-3" />
                       {{ t === 'character' ? '角色 (Character)' : t === 'spell_card' ? '符卡 (Spell Card)' : '其他 (Other)' }}
                     </button>
                  </div>
@@ -254,16 +299,17 @@ function removeTag(index: number) {
               <div class="grid grid-cols-3 gap-6">
                 <div>
                   <label class="block text-sm font-bold text-izakaya-wood dark:text-stone-300 mb-2">条目名称</label>
-                  <input v-model="formData.name" type="text" autofocus class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 transition-all" placeholder="例如：博丽神社">
+                  <input v-model="formData.name" :disabled="isTypeDisabled" type="text" autofocus class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed" placeholder="例如：博丽神社">
                 </div>
                 <div>
                   <label class="block text-sm font-bold text-izakaya-wood dark:text-stone-300 mb-2">分类 (文件夹)</label>
                   <div class="relative">
                     <input 
                       v-model="formData.category" 
+                      :disabled="isTypeDisabled"
                       type="text" 
                       list="category-list" 
-                      class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 transition-all"
+                      class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                       placeholder="选择或输入新分类..."
                     >
                     <datalist id="category-list">
@@ -275,7 +321,7 @@ function removeTag(index: number) {
                 <!-- Character Specific: Gender -->
                 <div v-if="formData.type === 'character' || !formData.type">
                   <label class="block text-sm font-bold text-izakaya-wood dark:text-stone-300 mb-2">性别</label>
-                  <select v-model="formData.gender" class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 transition-all">
+                  <select v-model="formData.gender" :disabled="isTypeDisabled" class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                      <option value="female">女性</option>
                      <option value="male">男性</option>
                      <option value="other">其他</option>
@@ -299,15 +345,15 @@ function removeTag(index: number) {
                     </div>
                     <div>
                        <label class="block text-xs font-bold text-izakaya-wood/60 dark:text-stone-400 mb-1.5">初始住所</label>
-                       <input v-model="formData.initialResidence" type="text" class="w-full text-sm border-izakaya-wood/20 rounded shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-900 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white" placeholder="例如：博丽神社">
+                       <input v-model="formData.initialResidence" :disabled="isTypeDisabled" type="text" class="w-full text-sm border-izakaya-wood/20 rounded shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-900 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed" placeholder="例如：博丽神社">
                     </div>
                     <div>
                        <label class="block text-xs font-bold text-izakaya-wood/60 dark:text-stone-400 mb-1.5">初始最大生命值</label>
-                       <input v-model.number="formData.initialMaxHp" type="number" class="w-full text-sm border-izakaya-wood/20 rounded shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-900 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white">
+                       <input v-model.number="formData.initialMaxHp" :disabled="isTypeDisabled" type="number" class="w-full text-sm border-izakaya-wood/20 rounded shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-900 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
                     </div>
                     <div>
                        <label class="block text-xs font-bold text-izakaya-wood/60 dark:text-stone-400 mb-1.5">初始战斗力</label>
-                       <select v-model="formData.initialPower" class="w-full text-sm border-izakaya-wood/20 rounded shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-900 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white">
+                       <select v-model="formData.initialPower" :disabled="isTypeDisabled" class="w-full text-sm border-izakaya-wood/20 rounded shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-900 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed">
                           <option v-for="p in ['∞', 'OMEGA', 'UX', 'EX', 'US', 'SSS', 'SS', 'S+', 'S', 'A+', 'A', 'B+', 'B', 'C+', 'C', 'D+', 'D', 'E+', 'E', 'F+', 'F', 'F-']" :key="p" :value="p">{{ p }}</option>
                        </select>
                     </div>
@@ -323,15 +369,15 @@ function removeTag(index: number) {
                  <div class="grid grid-cols-3 gap-6">
                     <div>
                        <label class="block text-xs font-bold text-blue-900/60 dark:text-blue-300/60 mb-1.5">释放消耗</label>
-                       <input v-model="formData.cost" type="text" class="w-full text-sm border-blue-200 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-stone-900 dark:border-blue-800 dark:text-stone-100 text-stone-900 bg-white" placeholder="如: 50 MP">
+                       <input v-model="formData.cost" :disabled="isTypeDisabled" type="text" class="w-full text-sm border-blue-200 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-stone-900 dark:border-blue-800 dark:text-stone-100 text-stone-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed" placeholder="如: 50 MP">
                     </div>
                     <div>
                        <label class="block text-xs font-bold text-blue-900/60 dark:text-blue-300/60 mb-1.5">伤害数值</label>
-                       <input v-model="formData.damage" type="text" class="w-full text-sm border-blue-200 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-stone-900 dark:border-blue-800 dark:text-stone-100 text-stone-900 bg-white" placeholder="如: 500">
+                       <input v-model="formData.damage" :disabled="isTypeDisabled" type="text" class="w-full text-sm border-blue-200 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-stone-900 dark:border-blue-800 dark:text-stone-100 text-stone-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed" placeholder="如: 500">
                     </div>
                     <div>
                        <label class="block text-xs font-bold text-blue-900/60 dark:text-blue-300/60 mb-1.5">伤害类型</label>
-                       <input v-model="formData.damageType" type="text" class="w-full text-sm border-blue-200 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-stone-900 dark:border-blue-800 dark:text-stone-100 text-stone-900 bg-white" placeholder="如: 魔法">
+                       <input v-model="formData.damageType" :disabled="isTypeDisabled" type="text" class="w-full text-sm border-blue-200 rounded shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-stone-900 dark:border-blue-800 dark:text-stone-100 text-stone-900 bg-white disabled:opacity-50 disabled:cursor-not-allowed" placeholder="如: 魔法">
                     </div>
                  </div>
               </div>
@@ -339,7 +385,7 @@ function removeTag(index: number) {
               <div>
                 <label class="block text-sm font-bold text-izakaya-wood dark:text-stone-300 mb-2">条目内容 (Prompt Injection)</label>
                 <p class="text-xs text-izakaya-wood/60 dark:text-stone-400 mb-2">当触发关键词出现时，这段内容会被注入到 System Prompt 中。</p>
-                <textarea v-model="formData.description" rows="8" class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 font-mono text-sm custom-scrollbar" placeholder="输入设定的详细描述..."></textarea>
+                <textarea v-model="formData.description" :disabled="isTypeDisabled" rows="8" class="w-full border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 font-mono text-sm custom-scrollbar disabled:opacity-50 disabled:cursor-not-allowed" placeholder="输入设定的详细描述..."></textarea>
               </div>
 
               <div>
@@ -348,18 +394,19 @@ function removeTag(index: number) {
                 <div class="flex flex-wrap gap-2 mb-3">
                   <span v-for="(tag, idx) in formData.tags" :key="idx" class="px-2 py-1 bg-stone-200 dark:bg-stone-700 rounded text-xs font-bold flex items-center gap-1 text-izakaya-wood dark:text-stone-300">
                     {{ tag }}
-                    <button @click="removeTag(idx)" class="hover:text-red-500"><X class="w-3 h-3" /></button>
+                    <button v-if="!isTypeDisabled" @click="removeTag(idx)" class="hover:text-red-500"><X class="w-3 h-3" /></button>
                   </span>
                 </div>
                 <div class="flex gap-2">
                   <input 
                     v-model="tagInput" 
+                    :disabled="isTypeDisabled"
                     @keydown.enter.prevent="addTag"
                     type="text" 
                     placeholder="输入标签并回车 (如: 博丽神社, 灵梦)" 
-                    class="flex-1 border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 text-sm"
+                    class="flex-1 border-izakaya-wood/20 rounded-lg shadow-sm focus:ring-touhou-red focus:border-touhou-red dark:bg-stone-800 dark:border-stone-700 dark:text-stone-100 text-stone-900 bg-white/80 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                  <button @click="addTag" class="px-4 py-2 bg-stone-200 dark:bg-stone-700 rounded-lg hover:bg-stone-300 dark:hover:bg-stone-600 transition-colors">
+                  <button @click="addTag" :disabled="isTypeDisabled" class="px-4 py-2 bg-stone-200 dark:bg-stone-700 rounded-lg hover:bg-stone-300 dark:hover:bg-stone-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     <Plus class="w-4 h-4" />
                   </button>
                 </div>

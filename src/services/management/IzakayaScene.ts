@@ -14,10 +14,13 @@ export class IzakayaScene {
   
   // Map Data
   private map: TileType[][] = [];
-  private floors: Record<number, TileType[][]> = {}; // Multi-floor storage
-  private currentFloor: number = 1; // Current active floor
-  private floorChairs: Record<number, Position[]> = {}; // Chairs per floor
-  private floorExits: Record<number, Position[]> = {}; // Exits per floor
+  private chairs: Position[] = [];
+  private exits: Position[] = [];
+  // private floors: Record<number, TileType[][]> = {}; // Multi-floor storage (Removed)
+  // private currentFloor: number = 1; // Current active floor (Removed)
+  // private floorChairs: Record<number, Position[]> = {}; // Chairs per floor (Removed)
+  // private floorExits: Record<number, Position[]> = {}; // Exits per floor (Removed)
+  private currentFloor: number = 1; // Keep for compatibility if needed, but always 1
   private placedItems: Map<string, Item> = new Map();
 
   // Input State
@@ -28,24 +31,28 @@ export class IzakayaScene {
   private spawnTimer = 0;
   private readonly SPAWN_INTERVAL = 5000; // 5 seconds
 
-  constructor(canvas: HTMLCanvasElement, customLayout?: string[], customFloors?: Record<string, string[]>) {
+  constructor(canvas: HTMLCanvasElement, customLayout?: string[]) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
     
     // Initialize Map
-    // Combine layout (Floor 1) and floors (Other floors)
-    const allFloors: Record<string, string[]> = {};
-    
     if (customLayout) {
-        allFloors["1"] = customLayout;
-    }
-    
-    if (customFloors) {
-        Object.assign(allFloors, customFloors);
-    }
+        // Parse single floor layout
+        const { map, chairs, exits, furniture } = this.parseLayout(customLayout);
+        this.map = map;
+        // this.chairs = chairs; // We need to store chairs if we want to access them, or rely on entities
+        // Since we removed floorChairs, we might want to just rely on entities or a single chairs array if needed.
+        // Original code used floorChairs for random seating?
+        // Let's see... spawnCustomer uses this.floorChairs[1].
+        // So I should keep a single chairs array.
+        this.chairs = chairs;
+        this.exits = exits;
 
-    if (Object.keys(allFloors).length > 0) {
-        this.parseFloors(allFloors);
+        // Add Furniture Entities
+        furniture.forEach(f => {
+            f.floor = 1; // Always floor 1
+            this.addEntity(f);
+        });
     } else {
         this.initMap();
     }
@@ -73,52 +80,8 @@ export class IzakayaScene {
       moveSpeed: 0.15,
     });
   }
-  
-  private parseFloors(floorsData: Record<string, string[]>) {
-    this.floors = {};
-    this.floorChairs = {};
-    this.floorExits = {};
-    
-    Object.entries(floorsData).forEach(([floorLevel, layout]) => {
-        const level = parseInt(floorLevel);
-        const { map, chairs, exits, furniture } = this.parseLayout(layout);
-        this.floors[level] = map;
-        this.floorChairs[level] = chairs;
-        this.floorExits[level] = exits;
-        
-        // Add Furniture Entities
-        furniture.forEach(f => {
-            f.floor = level; // Assign floor
-            this.addEntity(f);
-        });
-    });
 
-    // Set initial floor
-    this.switchFloor(1, false);
-  }
-
-  public switchFloor(targetFloor: number, movePlayer: boolean = true) {
-      if (!this.floors[targetFloor]) {
-          console.warn(`Floor ${targetFloor} does not exist.`);
-          return;
-      }
-      
-      this.currentFloor = targetFloor;
-      this.map = this.floors[targetFloor];
-      // this.chairs was removed as it was unused locally except for assignment
-      
-      // Update Player Floor
-      if (movePlayer) {
-          const player = this.entities.find(e => e.type === 'player');
-          if (player) {
-              player.floor = targetFloor;
-          }
-      }
-      
-      // Send event to UI (optional)
-      const event = new CustomEvent('izakaya-floor-change', { detail: { floor: targetFloor } });
-      this.canvas.dispatchEvent(event);
-  }
+  /* parseFloors and switchFloor removed */
 
   private parseLayout(layout: string[]) {
     const map: TileType[][] = [];
@@ -301,47 +264,9 @@ export class IzakayaScene {
     exits.push({x: 9, y: this.ROWS - 1});
     exits.push({x: 11, y: this.ROWS - 1});
 
-    // Add Stairs to 2nd Floor (Living Area) - Top Right Corner
-    map[1]![this.COLS - 2] = TileType.STAIRS;
-    map[2]![this.COLS - 2] = TileType.STAIRS;
-    map[1]![this.COLS - 3] = TileType.STAIRS; 
-    map[2]![this.COLS - 3] = TileType.STAIRS;
-    
-    // Store Floor 1
-    this.floors[1] = map;
-    this.floorChairs[1] = chairs;
-    this.floorExits[1] = exits;
-    
-    // Create Default Floor 2 (Living Quarters / More tables)
-    const map2: TileType[][] = [];
-    const chairs2: Position[] = [];
-    // Copy base structure
-    for (let y = 0; y < this.ROWS; y++) {
-        const row: TileType[] = [];
-        for (let x = 0; x < this.COLS; x++) {
-             // Walls
-             if (x === 0 || x === this.COLS - 1 || y === 0 || y === this.ROWS - 1) row.push(TileType.WALL);
-             else row.push(TileType.FLOOR);
-        }
-        map2.push(row);
-    }
-    // Add Stairs matching Floor 1
-    map2[1]![this.COLS - 2] = TileType.STAIRS;
-    map2[2]![this.COLS - 2] = TileType.STAIRS;
-    map2[1]![this.COLS - 3] = TileType.STAIRS; 
-    map2[2]![this.COLS - 3] = TileType.STAIRS;
-    
-    // Add some furniture to Floor 2
-    map2[5]![5] = TileType.COUNTER; // Table
-    map2[5]![4] = TileType.CHAIR; chairs2.push({x:4, y:5});
-    map2[5]![6] = TileType.CHAIR; chairs2.push({x:6, y:5});
-
-    this.floors[2] = map2;
-    this.floorChairs[2] = chairs2;
-    this.floorExits[2] = [];
-
-    // Set current
-    this.switchFloor(1, false);
+    this.map = map;
+    this.chairs = chairs;
+    this.exits = exits;
   }
 
 
@@ -547,36 +472,8 @@ export class IzakayaScene {
       if (!this.isValid(x, y)) return false;
       const tile = this.map[y]![x]!;
       // Player cannot walk on CHAIR (unless we implement jumping over it?)
-      return tile === TileType.FLOOR || tile === TileType.KITCHEN || tile === TileType.EXIT || tile === TileType.STAIRS || tile === TileType.SOFA;
+      return tile === TileType.FLOOR || tile === TileType.KITCHEN || tile === TileType.EXIT || tile === TileType.SOFA;
   }
-
-  // Stairs Interaction Logic
-  // Can only enter stairs from the front (bottom)
-  /*
-  private canEnterStairs(targetX: number, targetY: number, currentX: number, currentY: number): boolean {
-      const targetTile = this.map[targetY]![targetX]!;
-      if (targetTile !== TileType.STAIRS) return true;
-      
-      // Moving UP (dy < 0) means entering from bottom (y+1 to y)
-      // Moving DOWN (dy > 0) means entering from top (y-1 to y) -> Allowed?
-      // User says: "Only enter from front (bottom)"
-      // So if moving UP (dy = -1), allowed.
-      // If moving DOWN (dy = 1), blocked? (Assuming entering from top wall is invalid)
-      // If moving SIDEWAYS (dx != 0), blocked?
-      
-      const dy = targetY - currentY;
-      // const dx = targetX - currentX; // Unused
-      
-      if (dy < 0) return true; // Moving UP (Enter from bottom)
-      
-      // If ALREADY on stairs, can move anywhere on stairs?
-      // Assuming "Stairs" is a region.
-      const currentTile = this.map[currentY]![currentX]!;
-      if (currentTile === TileType.STAIRS) return true; // Moving within/out of stairs is fine
-      
-      return false; // Cannot enter from side/top
-  }
-  */
 
   private handlePlayerMovement(player: Entity, _deltaTime: number) {
     // deltaTime is unused for grid movement logic but kept for future smooth interpolation
@@ -598,84 +495,12 @@ export class IzakayaScene {
         else if (dx < 0) player.direction = 'left';
         else if (dx > 0) player.direction = 'right';
 
-        const currentTile = this.map[player.y]![player.x];
-        // Safely get target tile
-        let targetTile: TileType = TileType.WALL;
-        if (this.isValid(targetX, targetY)) {
-             const t = this.map[targetY]![targetX];
-             if (t !== undefined) targetTile = t;
-        }
-
-        // --- STAIRS TRIGGER LOGIC ---
-        // Run BEFORE movement check to allow triggering even if blocked by wall (e.g. top of stairs)
-        
-        // Case 1: Going UP (F1 -> F2)
-        // Trigger if: On Stairs AND Moving UP AND (Blocked by Wall OR Moving off Stairs)
-        if (currentTile === TileType.STAIRS && dy < 0) {
-            const currentFloor = player.floor || 1;
-            if (currentFloor === 1) {
-                const isBlockedByWall = !this.isWalkable(targetX, targetY); // Wall or Obstacle
-                const isMovingOff = this.isValid(targetX, targetY) && targetTile !== TileType.STAIRS;
-                
-                if (isBlockedByWall || isMovingOff) {
-                    const nextFloor = 2;
-                    if (this.floors[nextFloor]) {
-                        console.log(`Switching floor from ${currentFloor} to ${nextFloor}`);
-                        this.switchFloor(nextFloor, true);
-                        return;
-                    }
-                }
-            }
-        }
-        
-        // Case 2: Going DOWN (F2 -> F1) - Walking Up into Wall
-        // Trigger if: On Stairs AND Moving UP AND Blocked by Wall
-        if (currentTile === TileType.STAIRS && dy < 0) {
-             const currentFloor = player.floor || 1;
-             if (currentFloor === 2) {
-                 const isBlockedByWall = !this.isWalkable(targetX, targetY);
-                 if (isBlockedByWall) {
-                     const nextFloor = 1;
-                     if (this.floors[nextFloor]) {
-                         console.log(`Switching floor from ${currentFloor} to ${nextFloor}`);
-                         this.switchFloor(nextFloor, true);
-                         return;
-                     }
-                 }
-             }
-        }
-
-        // Case 3: Going DOWN (F2 -> F1) - Walking Down Logic
-        // Trigger if: On Stairs AND Moving DOWN AND (Blocked by Wall OR Moving off Stairs)
-        if (currentTile === TileType.STAIRS && dy > 0) {
-             const currentFloor = player.floor || 1;
-             if (currentFloor === 2) {
-                 // If walking off the stairs (at the bottom)
-                 const isBlockedByWall = !this.isWalkable(targetX, targetY);
-                 const isMovingOff = this.isValid(targetX, targetY) && targetTile !== TileType.STAIRS;
-                 
-                 if (isBlockedByWall || isMovingOff) {
-                     const nextFloor = 1;
-                     if (this.floors[nextFloor]) {
-                         console.log(`Switching floor from ${currentFloor} to ${nextFloor}`);
-                         this.switchFloor(nextFloor, true);
-                         return;
-                     }
-                 }
-             }
-        }
-
         if (this.isWalkable(targetX, targetY)) {
-           // Check Stairs Entry Constraint - Removed to fix blockage feeling, rely on walls/furniture
-           // if (!this.canEnterStairs(targetX, targetY, player.x, player.y)) {
-           //    return; // Blocked
-           // }
 
            // Also check if entity is there (e.g. customer) on the current floor
            const blocker = this.entities.find(e => 
                e.x === targetX && 
-               e.y === targetY && 
-               (e.floor === undefined || e.floor === this.currentFloor)
+               e.y === targetY
            );
            
            // Allow walking through certain furniture (Sofa)
@@ -746,7 +571,7 @@ export class IzakayaScene {
 
   private spawnCustomer() {
       // Find an empty seat on Floor 1 (Customers only on 1st floor)
-      const chairsOnFloor1 = this.floorChairs[1] || [];
+      const chairsOnFloor1 = this.chairs;
       if (chairsOnFloor1.length === 0) return;
 
       const occupiedSeats = new Set(
@@ -755,7 +580,7 @@ export class IzakayaScene {
           .map(e => (e as Customer).seatId)
       );
 
-      const availableChairs = chairsOnFloor1.filter(c => !occupiedSeats.has(`${c.x},${c.y}`));
+      const availableChairs = chairsOnFloor1.filter((c: Position) => !occupiedSeats.has(`${c.x},${c.y}`));
       
       if (availableChairs.length === 0) return; // No seats
 
@@ -777,7 +602,7 @@ export class IzakayaScene {
       let spawnY = this.ROWS - 1;
       
       // Usually customers spawn on Floor 1
-      const spawnExits = this.floorExits[1] || [];
+      const spawnExits = this.exits;
       
       if (spawnExits.length > 0) {
           const exit = spawnExits[Math.floor(Math.random() * spawnExits.length)];
@@ -817,7 +642,7 @@ export class IzakayaScene {
   private updateCustomer(customer: Customer, deltaTime: number) {
        if (customer.isMoving) return;
        
-       const customerMap = this.floors[customer.floor || 1] || this.map;
+       const customerMap = this.map;
  
        // Patience Decay
        if (['waiting_seat', 'ordering', 'waiting_food'].includes(customer.state)) {
@@ -876,7 +701,7 @@ export class IzakayaScene {
           let exitX = 10;
           let exitY = this.ROWS - 1;
           
-          const exits = this.floorExits[customer.floor || 1] || [];
+          const exits = this.exits;
           if (exits.length > 0) {
               // Find nearest exit
               let minDist = Infinity;
