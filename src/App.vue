@@ -29,6 +29,7 @@ import { parseMarkdown } from '@/utils/markdown';
 import { useSmoothStream } from '@/composables/useSmoothStream';
 import SakuraBackground from '@/components/SakuraBackground.vue';
 import { audioManager } from '@/services/audio';
+import MusicPlayer from '@/components/MusicPlayer.vue';
 
 const chatStore = useChatStore();
 const settingsStore = useSettingsStore();
@@ -230,6 +231,7 @@ function handleHelpAction(action: string) {
     
     <SakuraBackground />
     <ToastContainer />
+    <MusicPlayer />
 
     <!-- Top Bar: 居酒屋暖帘风格 -->
     <header class="h-14 bg-white/90 backdrop-blur-md border-b-2 border-touhou-red/20 flex items-center justify-between px-6 shadow-sm z-20 flex-shrink-0 relative">
