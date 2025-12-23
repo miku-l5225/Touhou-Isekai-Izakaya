@@ -59,7 +59,7 @@
               </div>
               <div class="flex-1">
                 <div class="font-bold font-display text-izakaya-wood dark:text-stone-200 group-hover/reward:text-marisa-gold transition-colors">{{ reward.description }}</div>
-                <div v-if="reward.value" class="text-xs text-izakaya-wood/60 dark:text-stone-400 font-serif mt-0.5 font-bold">{{ reward.value }}</div>
+                <div v-if="reward.value" class="text-xs text-izakaya-wood/60 dark:text-stone-400 font-serif mt-0.5 font-bold">{{ formatRewardValue(reward) }}</div>
               </div>
             </div>
           </div>
@@ -112,6 +112,18 @@ function getRewardTypeIcon(type: string) {
     'event': '❤️'
   };
   return map[type] || '🎁';
+}
+
+function formatRewardValue(reward: any) {
+  if (!reward.value) return '';
+  
+  // If it's an item with "Name,Type" format, only show Name
+  if (reward.type === 'item' && typeof reward.value === 'string' && reward.value.includes(',')) {
+    return reward.value.split(',')[0];
+  }
+  
+  // For money or other simple values, show as is (numbers will be converted to string)
+  return reward.value;
 }
 
 function handleAccept() {

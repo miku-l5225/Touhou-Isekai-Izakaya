@@ -1,6 +1,8 @@
 import { db, type MemoryEntry } from '@/db';
 import { useGameStore } from '@/stores/game';
-import { generateCompletion } from './llm'; // Assume this exists
+import { useCharacterStore } from '@/stores/character';
+import { generateCompletion } from '@/services/llm';
+import { resolveCharacterId } from '@/services/characterMapping';
 import _ from 'lodash';
 
 import { useSettingsStore } from '@/stores/settings';
@@ -97,12 +99,15 @@ export class MemoryService {
           .equals([saveSlotId, 'variable_change', turnCount])
           .delete();
 
+        const gameStore = useGameStore();
+        const charStore = useCharacterStore();
+        
         await db.memories.add({
           saveSlotId,
           turnCount,
           type: 'variable_change',
           content: JSON.stringify(variableChanges),
-          related_entities: this.extractEntityIdsFromActions(variableChanges),
+          related_entities: this.extractEntityIdsFromActions(variableChanges, charStore.characters, gameStore.state.npcs),
           tags: ['system', 'variable', ...variableChanges.map(a => a.type)],
           importance: 2, // Default importance for stat changes
           createdAt: Date.now(),
@@ -462,11 +467,14 @@ ${candidates}
       .delete();
   }
 
-  private extractEntityIdsFromActions(actions: any[]): string[] {
+  private extractEntityIdsFromActions(actions: any[], staticCharacters: any[] = [], runtimeNpcs: Record<string, any> = {}): string[] {
     const entities = new Set<string>();
     actions.forEach(a => {
-      if (a.npcId) entities.add(a.npcId);
-      if (a.add_chars) a.add_chars.forEach((c: any) => entities.add(typeof c === 'string' ? c : c.id || c.name));
+      if (a.npcId) entities.add(resolveCharacterId(a.npcId, staticCharacters, runtimeNpcs));
+      if (a.add_chars) a.add_chars.forEach((c: any) => {
+          const rawId = typeof c === 'string' ? c : c.id || c.name;
+          entities.add(resolveCharacterId(rawId, staticCharacters, runtimeNpcs));
+      });
     });
     return Array.from(entities);
   }

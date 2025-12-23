@@ -5,6 +5,7 @@ import { useCharacterStore } from '@/stores/character';
 import { audioManager } from '@/services/audio';
 import { Users, X } from 'lucide-vue-next';
 import type { NPCStatus } from '@/types/game';
+import { findAvatarImage, resolveCharacterId } from '@/services/characterMapping';
 
 // Import avatar images
 const avatarImages = import.meta.glob('@/assets/images/head/*.png', { eager: true, query: '?url', import: 'default' });
@@ -16,27 +17,28 @@ const npcs = computed(() => gameStore.state.npcs);
 
 const currentSceneNPCs = computed(() => {
   return systemState.value.current_scene_npcs.map(id => {
-    // 1. Try Runtime State (Match by ID or Name)
-    let npc = npcs.value[id];
+    // 1. Resolve Canonical ID using new service
+    const resolvedId = resolveCharacterId(id, characterStore.characters, npcs.value);
+    
+    // 2. Try Runtime State using resolved ID
+    let npc = npcs.value[resolvedId];
     if (!npc) {
-       npc = Object.values(npcs.value).find(n => n.name === id || n.id === id);
+       // Fallback for cases where id is still not the resolved one in the store
+       npc = npcs.value[id];
     }
 
-    // 2. Try Static Data (Match by UUID or Name)
-    const staticChar = characterStore.characters.find(c => 
-        (c.uuid && (c.uuid === id || (npc && c.uuid === npc.id))) || 
-        (c.name && (c.name === id || (npc && c.name === npc.name)))
-    );
+    // 3. Try Static Data using resolved ID
+    const staticChar = characterStore.characters.find(c => c.uuid === resolvedId);
 
-    // 3. Merge: Static Data first, then Runtime Data overrides
+    // 4. Merge: Static Data first, then Runtime Data overrides
     const displayNpc: any = {
-        id: id, // Default ID
-        name: id, // Default Name
+        id: resolvedId, // Use canonical ID
+        name: staticChar?.name || id, // Prefer static name
         ...staticChar, // Base with static data
         ...npc, // Override with runtime data
     };
 
-    // 4. Ensure Critical Fields & Defaults
+    // 5. Ensure Critical Fields & Defaults
     if (!displayNpc.name) displayNpc.name = id;
     if (!displayNpc.clothing) displayNpc.clothing = '未知';
     if (!displayNpc.mood) displayNpc.mood = '平静';
@@ -80,35 +82,7 @@ function getAvatarColor(name: string) {
 
 function getAvatarImage(name: string) {
   if (!name) return undefined;
-  
-  // Normalize keys to be safe
-  const normalizedKeys = Object.keys(avatarImages);
-
-  // 1. Try exact match with constructed path
-  const directKey = `/src/assets/images/head/${name}_头像.png`;
-  if (avatarImages[directKey]) return avatarImages[directKey] as string;
-
-  // 2. Fuzzy match: Check if any available image matches the name partially
-  for (const path of normalizedKeys) {
-      // Extract core name from path (e.g. "灵梦" from ".../灵梦_头像.png")
-      // Handle both forward and backward slashes just in case
-      const fileName = path.split('/').pop()?.split('\\').pop(); // Get filename
-      if (!fileName) continue;
-      
-      // Match pattern: {Name}_头像.png
-      const match = fileName.match(/^(.+)_头像\.png$/);
-      if (match && match[1]) {
-          const coreName = match[1]; // "灵梦"
-          
-          // Check if NPC name contains the core name (e.g. "博丽灵梦" contains "灵梦")
-          // OR if core name contains NPC name
-          if (name.includes(coreName) || coreName.includes(name)) {
-              return avatarImages[path] as string;
-          }
-      }
-  }
-  
-  return undefined;
+  return findAvatarImage(name, avatarImages);
 }
 
 

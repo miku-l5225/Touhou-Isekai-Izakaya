@@ -14,9 +14,10 @@ import SaveManager from '@/components/SaveManager.vue';
 import MemoryPanel from '@/components/MemoryPanel.vue';
 import SummaryModal from '@/components/SummaryModal.vue';
 import ToastContainer from '@/components/ToastContainer.vue';
-import { Send, Settings as SettingsIcon, Save, Loader2, Square, Book, Database, Blocks, Brain, Hammer, Store } from 'lucide-vue-next';
+import { Send, Settings as SettingsIcon, Save, Loader2, Square, Book, Database, Blocks, Brain, Hammer, Store, RefreshCw } from 'lucide-vue-next';
 import PromptBuilder from '@/components/PromptBuilder.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
+import { useConfirm } from '@/utils/confirm';
 import CombatOverlay from '@/components/CombatOverlay.vue';
 import IzakayaGame from '@/components/management/IzakayaGame.vue';
 import QuestList from '@/components/QuestList.vue';
@@ -31,6 +32,7 @@ const chatStore = useChatStore();
 const settingsStore = useSettingsStore();
 const saveStore = useSaveStore();
 const gameStore = useGameStore();
+const { confirm } = useConfirm();
 
 // Setup smooth streaming
 const { displayed: smoothContent } = useSmoothStream(
@@ -134,6 +136,55 @@ function handleOpenSummary(turnCount: number) {
 function handleManagementClose() {
   if (gameStore.state.system.management) {
     gameStore.state.system.management.isActive = false;
+  }
+}
+
+async function handleRefresh() {
+  if (gameLoop.isProcessing.value || gameLoop.isBackgroundProcessing.value) return;
+
+  const messages = chatStore.messages;
+  if (messages.length === 0) return;
+
+  const lastMsg = messages[messages.length - 1];
+  if (!lastMsg) return;
+
+  let textToResend = '';
+  let msgToDeleteId: number | undefined;
+
+  // Scenario 1: Last message is Assistant (Normal reply exists)
+  if (lastMsg.role === 'assistant') {
+    // Check if there is a preceding user message
+    if (messages.length >= 2) {
+      const prevMsg = messages[messages.length - 2];
+      if (prevMsg && prevMsg.role === 'user') {
+        textToResend = prevMsg.content;
+        msgToDeleteId = lastMsg.id;
+      }
+    }
+  } 
+  // Scenario 2: Last message is User (Generation failed / No reply yet)
+  else if (lastMsg.role === 'user') {
+    textToResend = lastMsg.content;
+    msgToDeleteId = lastMsg.id;
+  }
+
+  if (textToResend && msgToDeleteId !== undefined) {
+    const confirmed = await confirm('确定要重新开始本轮对话吗？这将回滚到此轮开始前的状态并重新生成回复。', {
+      title: '重新开始对话',
+      confirmText: '确定',
+      cancelText: '取消',
+      destructive: true
+    });
+
+    if (!confirmed) return;
+
+    audioManager.playClick();
+    
+    // 1. Delete the turn(s)
+    await chatStore.deleteTurn(msgToDeleteId);
+    
+    // 2. Resend the text
+    await gameLoop.handleUserAction(textToResend);
   }
 }
 </script>
@@ -314,6 +365,16 @@ function handleManagementClose() {
                 
                 <!-- Ink Stone / Send Button Container -->
                 <div class="absolute right-2 bottom-1.5 z-40 flex gap-2">
+                    <button 
+                      v-if="chatStore.messages.length > 0"
+                      @click="handleRefresh"
+                      :disabled="gameLoop.isProcessing.value || gameLoop.isBackgroundProcessing.value"
+                      class="p-3 bg-touhou-red hover:bg-touhou-red-dark text-white rounded-full transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 border-4 border-white/20 mr-2 group/refresh"
+                      title="重新开始本轮对话 (Refresh)"
+                    >
+                      <RefreshCw class="w-5 h-5 group-hover/refresh:rotate-180 transition-transform duration-500" />
+                    </button>
+
                     <button 
                       v-if="!gameLoop.isProcessing.value && !gameLoop.isBackgroundProcessing.value"
                       @click="handleSend"

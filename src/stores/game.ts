@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 import { type GameState, INITIAL_GAME_STATE, type GameAction, type Quest, type QuestStatus, type Item, type PromiseState } from '@/types/game';
 import { type SpellCard } from '@/types/combat';
 import { useCharacterStore } from '@/stores/character';
+import { resolveCharacterId } from '@/services/characterMapping';
 import { PRESET_ITEMS } from '@/data/items';
 import { PRESET_SPELLCARDS } from '@/data/spellcards';
 import _ from 'lodash';
@@ -426,47 +427,24 @@ export const useGameStore = defineStore('game', () => {
           const charStore = useCharacterStore();
           // Handle both English ID and Chinese Name as ID
           let npcId = action.npcId;
-          const npcIdLower = npcId.toLowerCase().trim();
           
-          // 1. Try to resolve via Static Database (Priority: UUID > Name)
-          // Use case-insensitive matching
-          const staticChar = charStore.characters.find(c => 
-            (c.uuid && c.uuid.toLowerCase() === npcIdLower) || 
-            (c.name && c.name.toLowerCase().trim() === npcIdLower)
-          );
-          
-          if (staticChar) {
-            npcId = staticChar.uuid;
-          }
+          // 1. Resolve ID using centralized service
+          const resolvedId = resolveCharacterId(npcId, charStore.characters, state.value.npcs);
+          npcId = resolvedId;
 
-          // 2. Fallback: If not in DB, check Runtime State by Name
-          // If using Chinese name as ID, find the correct English ID
-          if (!staticChar && !state.value.npcs[npcId]) {
-            // Search for NPC by Chinese name or Case-insensitive ID
-            const foundNpcEntry = Object.entries(state.value.npcs).find(([id, npc]) => 
-               npc.name === npcId || 
-               npc.name === npcIdLower || 
-               id.toLowerCase() === npcIdLower
-            );
-            if (foundNpcEntry) {
-              npcId = foundNpcEntry[0];
-            }
-          }
-          
-          // Create NPC entry if not exists (Lazy init)
           if (!state.value.npcs[npcId]) {
-             // If we found a static char but it wasn't in runtime yet, init with correct name
-             const initialName = staticChar ? staticChar.name : action.npcId;
-             state.value.npcs[npcId] = { 
-                id: npcId, 
-                name: initialName,
-                gender: staticChar?.gender as any 
-             } as any;
-          } else {
-             // Patch existing NPC if gender is missing
-             const existingNpc = state.value.npcs[npcId];
-             if (existingNpc && !existingNpc.gender && staticChar?.gender) {
-                existingNpc.gender = staticChar.gender as any;
+             // If still not found, try to auto-create if we have static data
+             // (This happens if LLM tries to update an NPC that isn't formally in scene yet)
+             const staticChar = charStore.characters.find(c => c.uuid === npcId);
+             if (staticChar) {
+                 state.value.npcs[npcId] = {
+                     id: npcId,
+                     name: staticChar.name,
+                     gender: staticChar.gender as any
+                 } as any;
+             } else {
+                 console.warn(`[GameStore] UPDATE_NPC failed: NPC '${npcId}' not found in runtime or static DB.`);
+                 return; // Abort if really not found
              }
           }
 
@@ -477,7 +455,7 @@ export const useGameStore = defineStore('game', () => {
           }
           
           const npc = state.value.npcs[npcId];
-          if (!npc) return; // Defensive check
+          if (!npc) return;
           
           // Map Chinese keys to English keys if necessary
           const targetField = NPC_FIELD_MAPPING[action.field] || action.field;
@@ -742,28 +720,24 @@ export const useGameStore = defineStore('game', () => {
 
              if (!charId) continue;
 
-             // Resolve UUID from Character Store
-             const charIdLower = charId.toLowerCase().trim();
-             const staticChar = charStore.characters.find(c => 
-                (c.uuid && c.uuid.toLowerCase() === charIdLower) || 
-                (c.name && c.name.toLowerCase().trim() === charIdLower)
-             );
+             // Resolve UUID using centralized service
+             const resolvedId = resolveCharacterId(charId, charStore.characters, state.value.npcs);
+             let staticChar = charStore.characters.find(c => c.uuid === resolvedId);
              
+             // If resolveCharacterId returns the original input (fallback), try to find staticChar by other means or assume it's a new ID
+             if (resolvedId === charId && !staticChar) {
+                 // Try finding by name in static DB one last time (resolveCharacterId should have done this, but to be safe)
+                 // Actually resolveCharacterId covers this.
+             } else {
+                 charId = resolvedId;
+             }
+             
+             // If we found a static char, ensure we use its UUID and Name
              if (staticChar) {
                 charId = staticChar.uuid;
-                // Auto-fill name if missing in runtime
                 if (!state.value.npcs[charId]) {
                    state.value.npcs[charId] = { id: charId, name: staticChar.name } as any;
                 }
-             } else {
-                 // Try to find in runtime by case-insensitive ID
-                 const foundNpcEntry = Object.entries(state.value.npcs).find(([id, npc]) => 
-                    id.toLowerCase() === charIdLower || 
-                    npc.name === charId // Keep original name match just in case
-                 );
-                 if (foundNpcEntry) {
-                    charId = foundNpcEntry[0];
-                 }
              }
 
              if (!state.value.system.current_scene_npcs.includes(charId)) {
@@ -803,24 +777,7 @@ export const useGameStore = defineStore('game', () => {
            const charStore = useCharacterStore();
            // Resolve all IDs to remove to their canonical internal IDs
            const resolvedIdsToRemove = action.remove_chars.map(rawId => {
-               const rawIdLower = rawId.toLowerCase().trim();
-               
-               // 1. Try Static DB
-               const staticChar = charStore.characters.find(c => 
-                  (c.uuid && c.uuid.toLowerCase() === rawIdLower) || 
-                  (c.name && c.name.toLowerCase().trim() === rawIdLower)
-               );
-               if (staticChar) return staticChar.uuid;
-               
-               // 2. Try Runtime
-               const foundNpcEntry = Object.entries(state.value.npcs).find(([id, npc]) => 
-                  id.toLowerCase() === rawIdLower || 
-                  npc.name === rawId ||
-                  npc.name === rawIdLower
-               );
-               if (foundNpcEntry) return foundNpcEntry[0];
-               
-               return rawId;
+               return resolveCharacterId(rawId, charStore.characters, state.value.npcs);
            });
 
            state.value.system.current_scene_npcs = state.value.system.current_scene_npcs.filter(

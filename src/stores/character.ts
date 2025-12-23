@@ -128,6 +128,8 @@ export const useCharacterStore = defineStore('character', () => {
 
   // Find character by name (fuzzy match or exact)
   function findCharacterByName(name: string) {
+    // This is a simple fuzzy search for UI purposes or manual lookup
+    // For canonical ID resolution, use resolveCharacterId in characterMapping.ts
     return characters.value.find(c => c.name.includes(name) || name.includes(c.name));
   }
   

@@ -8,6 +8,7 @@ import { type Combatant } from '@/types/combat';
 import { COMBAT_NARRATOR_PROMPT } from '@/stores/prompt';
 import { useCharacterStore } from '@/stores/character';
 import { useToastStore } from '@/stores/toast';
+import { resolveCharacterId } from './characterMapping';
 
 const LOGIC_SYSTEM_PROMPT = `
 你是一个《东方Project》RPG游戏的“Game Master”逻辑处理器。
@@ -561,11 +562,8 @@ export class LogicService {
            if (c.isPlayer) continue;
 
            // Try to find static data in Lorebook
-           const staticChar = charStore.characters.find(
-             ch => (ch.uuid && ch.uuid === c.id) || 
-                   (ch.name && ch.name === c.name) || 
-                   (ch.uuid && c.id && ch.uuid.toLowerCase() === c.id.toLowerCase())
-           );
+           const resolvedId = resolveCharacterId(c.id || c.name, charStore.characters, gameStore.state.npcs);
+           const staticChar = charStore.characters.find(ch => ch.uuid === resolvedId);
            
            const desc = staticChar?.description || "暂无详细设定";
            // Truncate desc if too long

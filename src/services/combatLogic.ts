@@ -1,6 +1,7 @@
 import type { PowerLevel, Combatant, SpellCard } from '@/types/combat';
 import { generateCompletion } from '@/services/llm';
 import { useCharacterStore } from '@/stores/character';
+import { resolveCharacterId } from '@/services/characterMapping';
 import { useGameStore } from '@/stores/game';
 
 // 1. Power Level Base Damage Configuration
@@ -348,11 +349,12 @@ export async function processPersuasion(
   }
   
   const getPersona = (name: string, id?: string) => {
-    const char = charStore.characters.find(c => 
-      (c.uuid && id && c.uuid === id) || 
-      (c.name && c.name === name) ||
-      (c.uuid && id && c.uuid.toLowerCase() === id.toLowerCase())
-    );
+    // Resolve ID properly using service
+    const resolvedId = resolveCharacterId(id || name, charStore.characters, gameStore.state.npcs);
+    
+    // Find using resolved ID
+    const char = charStore.characters.find(c => c.uuid === resolvedId);
+    
     return char?.description ? char.description.slice(0, 500) + (char.description.length > 500 ? '...' : '') : "暂无详细设定";
   };
 

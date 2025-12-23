@@ -216,7 +216,7 @@
                 <span>
                     <span class="text-marisa-gold-dim font-bold text-xs bg-marisa-gold/10 px-1 rounded mr-1">[{{ getRewardTypeName(reward.type) }}]</span> 
                     {{ reward.description }}
-                    <span v-if="reward.value" class="text-izakaya-wood/50 text-xs ml-1 font-mono">({{ reward.value }})</span>
+                    <span v-if="reward.value" class="text-izakaya-wood/50 text-xs ml-1 font-mono">({{ formatRewardValue(reward) }})</span>
                 </span>
               </li>
             </ul>
@@ -350,5 +350,13 @@ function getRewardTypeName(type: string) {
     'event': '事件'
   };
   return map[type] || type;
+}
+
+function formatRewardValue(reward: any) {
+  if (!reward.value) return '';
+  if (reward.type === 'item' && typeof reward.value === 'string' && reward.value.includes(',')) {
+    return reward.value.split(',')[0];
+  }
+  return reward.value;
 }
 </script>

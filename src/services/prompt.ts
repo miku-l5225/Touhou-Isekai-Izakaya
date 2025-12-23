@@ -6,6 +6,7 @@ import { usePromptStore } from '@/stores/prompt';
 import { useSaveStore } from '@/stores/save';
 import { MemoryService } from './memory';
 import { estimateTokens } from '@/utils/token';
+import { resolveCharacterId } from './characterMapping';
 
 export interface PromptSection {
   id: string;
@@ -260,11 +261,8 @@ export class PromptService {
       // Strategy 1: Scene based (Who is explicitly in the scene?)
       for (const npcId of currentSceneNPCs) {
         if (!npcId) continue;
-        const lowerId = String(npcId).toLowerCase().trim();
-        let card = charStore.characters.find(c => 
-          (c.uuid && c.uuid.toLowerCase() === lowerId) || 
-          (c.name && c.name.toLowerCase() === lowerId)
-        );
+        const resolvedId = resolveCharacterId(npcId, charStore.characters, gameStore.state.npcs);
+        const card = charStore.characters.find(c => c.uuid === resolvedId);
         if (card) {
           activeChars.set(card.uuid, { card, reason: '当前场景角色' });
         }
@@ -289,12 +287,8 @@ export class PromptService {
       // Strategy 3: Injection from Prediction (Previous Round)
       const predictedChars = gameStore.state.system.predicted_next_round_chars || [];
       for (const predName of predictedChars) {
-          const lowerName = predName.toLowerCase().trim();
-          // Find in store
-          let card = charStore.characters.find(c => 
-            (c.uuid && c.uuid.toLowerCase() === lowerName) || 
-            (c.name && c.name.toLowerCase() === lowerName)
-          );
+          const resolvedId = resolveCharacterId(predName, charStore.characters, gameStore.state.npcs);
+          const card = charStore.characters.find(c => c.uuid === resolvedId);
           
           if (card && !activeChars.has(card.uuid)) {
             activeChars.set(card.uuid, { card, reason: '剧情预测' });
@@ -410,10 +404,12 @@ MP：${p.mp}/${p.max_mp}
       const otherNPCs: string[] = [];
 
       for (const npcId of currentSceneNPCs) {
+        // Resolve canonical ID
+        const resolvedId = resolveCharacterId(npcId, charStore.characters, gameStore.state.npcs);
         // Find static card data for name
-        const card = charStore.characters.find(c => c.uuid === npcId || c.name === npcId);
+        const card = charStore.characters.find(c => c.uuid === resolvedId);
         // Find runtime status
-        const status = gameStore.state.npcs[npcId];
+        const status = gameStore.state.npcs[npcId] || gameStore.state.npcs[resolvedId];
 
         // Determine display name: Priority: Card Name > Runtime Name > ID
         const name = card?.name || status?.name || npcId;

@@ -14,7 +14,8 @@ import type { CombatState, Combatant, PowerLevel, SpellCard } from '@/types/comb
 import { audioManager } from './audio';
 import { v4 as uuidv4 } from 'uuid';
 import { useCharacterStore } from '@/stores/character';
-import { PRESET_SPELLCARDS, CHARACTER_NAME_MAP } from '@/data/spellcards';
+import { PRESET_SPELLCARDS } from '@/data/spellcards';
+import { CHARACTER_NAME_TO_ID_MAP, resolveCharacterId } from '@/services/characterMapping';
 import { getBuffByName } from '@/data/buff';
 
 export type GameLoopStage = 'idle' | 'preparing' | 'generating_story' | 'background_processing' | 'committing';
@@ -790,38 +791,31 @@ class GameLoopService {
         // 2. If no matches, try Name Mapping (Double Layer Matching)
         if (matches.length === 0 && npcName) {
             // Debug: Check map availability
-            if (Object.keys(CHARACTER_NAME_MAP).length === 0) {
-                console.warn('[Combat Init] CHARACTER_NAME_MAP is empty! Check spellcards.ts export.');
+            if (Object.keys(CHARACTER_NAME_TO_ID_MAP).length === 0) {
+                console.warn('[Combat Init] CHARACTER_NAME_TO_ID_MAP is empty! Check characterMapping.ts export.');
             }
 
             // Check if npcName is in the map (or trimmed)
-            let mappedId = CHARACTER_NAME_MAP[npcName] || CHARACTER_NAME_MAP[npcName.trim()];
+            let mappedId = CHARACTER_NAME_TO_ID_MAP[npcName] || CHARACTER_NAME_TO_ID_MAP[npcName.trim()];
             
             // 2.1 Fuzzy Search (Substring) - if exact match fails
             if (!mappedId) {
                 const cleanName = npcName.trim();
-                console.log(`[Combat Init] Fuzzy searching for '${cleanName}' (len=${cleanName.length}). Keys available: ${Object.keys(CHARACTER_NAME_MAP).length}`);
-                
-                // Find a key in MAP that is contained in cleanName
-                // Sort by length desc to match longest key first (e.g. '十六夜咲夜' vs '咲夜')
-                const foundKey = Object.keys(CHARACTER_NAME_MAP)
-                    .sort((a, b) => b.length - a.length)
-                    .find(k => cleanName.includes(k));
+                // Find any key that is part of the name OR name is part of key
+                const foundKey = Object.keys(CHARACTER_NAME_TO_ID_MAP).find(k => 
+                    cleanName.includes(k) || k.includes(cleanName)
+                );
                 
                 if (foundKey) {
-                    mappedId = CHARACTER_NAME_MAP[foundKey];
-                    console.log(`[Combat Init] Fuzzy matched name '${npcName}' to key '${foundKey}' -> ID '${mappedId}'`);
-                } else {
-                    console.log(`[Combat Init] Fuzzy search failed for '${cleanName}'. First 5 map keys: ${Object.keys(CHARACTER_NAME_MAP).slice(0, 5).join(', ')}`);
+                    mappedId = CHARACTER_NAME_TO_ID_MAP[foundKey];
+                    console.log(`[Combat Init] Fuzzy mapped '${npcName}' -> '${foundKey}' -> ID: ${mappedId}`);
                 }
-            } else {
-                 console.log(`[Combat Init] Exact matched name '${npcName}' -> ID '${mappedId}'`);
             }
 
             if (mappedId) {
+                // Try finding cards with this mapped ID
                 const mappedPrefix = mappedId.toLowerCase() + '_';
                 const allKeys = Object.keys(PRESET_SPELLCARDS);
-                console.log(`[Combat Init] Searching for prefix '${mappedPrefix}' in ${allKeys.length} preset cards.`);
                 
                 matches = Object.entries(PRESET_SPELLCARDS)
                     .filter(([key]) => key.startsWith(mappedPrefix))
@@ -848,7 +842,7 @@ class GameLoopService {
         if (matches.length > 0) {
              console.log(`[Combat Init] Found ${matches.length} spell cards for ${npcName} (ID: ${npcId}) via ${method}`);
         } else {
-             console.log(`[Combat Init] No spell cards found for ${npcName} (ID: ${npcId}). Tried mapping: ${CHARACTER_NAME_MAP[npcName || '']}`);
+             console.log(`[Combat Init] No spell cards found for ${npcName} (ID: ${npcId}). Tried mapping: ${CHARACTER_NAME_TO_ID_MAP[npcName || '']}`);
         }
 
         return matches.map(([_, val]) => ({
@@ -922,29 +916,25 @@ class GameLoopService {
 
       // --- Attempt 2: Static DB Lookup (Fallback) ---
       if (!matchedNPC) {
-          // Find in Lorebook
-          const staticChar = charStore.characters.find(c => 
-             (c.uuid && c.uuid.toLowerCase() === enemyNameLower) || 
-             (c.name && c.name.toLowerCase().trim() === enemyNameLower)
-          );
-
-          if (staticChar) {
-              // We found the static definition (e.g. found via uuid="cirno")
-              // Now check if this UUID exists in Runtime Store
-              const runtimeRef = gameStore.state.npcs[staticChar.uuid];
+          const resolvedId = resolveCharacterId(enemyNameLower, charStore.characters, gameStore.state.npcs);
+          
+          if (resolvedId && resolvedId !== enemyNameLower) {
+              const runtimeRef = gameStore.state.npcs[resolvedId];
               if (runtimeRef) {
                   matchedNPC = runtimeRef;
               } else {
-                  // Not in runtime yet? Use Static Data directly
-                  // This happens if initializeNewGame missed it or it's a new char
-                  matchedNPC = {
-                      id: staticChar.uuid,
-                      name: staticChar.name,
-                      power: staticChar.initialPower || 'F',
-                      hp: staticChar.initialMaxHp || 1000,
-                      maxHp: staticChar.initialMaxHp || 1000
-                  };
-                  console.log('[Combat Init] Created ephemeral NPC from Static DB:', matchedNPC.name);
+                  // Not in runtime yet? Use Static Data directly if possible
+                  const staticChar = charStore.characters.find(c => c.uuid === resolvedId);
+                  if (staticChar) {
+                      matchedNPC = {
+                          id: staticChar.uuid,
+                          name: staticChar.name,
+                          hp: staticChar.initialMaxHp || 1000,
+                          max_hp: staticChar.initialMaxHp || 1000,
+                          power: staticChar.initialPower || 'C',
+                          combatLevel: 1 // Default
+                      };
+                  }
               }
           }
       }
@@ -1030,22 +1020,16 @@ class GameLoopService {
       let matchedNPC: any = null;
       const allyNameRaw = a.name || 'Unknown Ally';
       const allyNameLower = allyNameRaw.toLowerCase().trim();
-      const allRuntimeNpcs = Object.values(gameStore.state.npcs || {});
 
-      // --- Attempt 1: Direct Runtime Match ---
-      matchedNPC = allRuntimeNpcs.find((npc: any) => {
-          if (a.id && npc.id === a.id) return true;
-          if (npc.name && npc.name.toLowerCase().trim() === allyNameLower) return true;
-          if (npc.id && npc.id.toLowerCase() === allyNameLower) return true;
-          return false;
-      });
+      // --- Attempt 1: Resolve Canonical ID using centralized service ---
+      const resolvedId = resolveCharacterId(a.id || allyNameLower, charStore.characters, gameStore.state.npcs);
+      
+      // --- Attempt 2: Runtime Match ---
+      matchedNPC = gameStore.state.npcs[resolvedId];
 
-      // --- Attempt 2: Static DB Lookup (Fallback) ---
+      // --- Attempt 3: Static DB Lookup (Fallback) ---
       if (!matchedNPC) {
-          const staticChar = charStore.characters.find(c => 
-             (c.uuid && c.uuid.toLowerCase() === allyNameLower) || 
-             (c.name && c.name.toLowerCase().trim() === allyNameLower)
-          );
+          const staticChar = charStore.characters.find(c => c.uuid === resolvedId);
 
           if (staticChar) {
               const runtimeRef = gameStore.state.npcs[staticChar.uuid];
@@ -1057,7 +1041,8 @@ class GameLoopService {
                       name: staticChar.name,
                       power: staticChar.initialPower || 'F',
                       hp: staticChar.initialMaxHp || 1000,
-                      maxHp: staticChar.initialMaxHp || 1000
+                      max_hp: staticChar.initialMaxHp || 1000,
+                      combatLevel: 1
                   };
                   console.log('[Combat Init] Created ephemeral Ally from Static DB:', matchedNPC.name);
               }
