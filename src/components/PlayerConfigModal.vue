@@ -2,7 +2,7 @@
 import { ref, computed, watch } from 'vue';
 import { useGameStore } from '@/stores/game';
 import { audioManager } from '@/services/audio';
-import { X, Save, User, Camera, Image as ImageIcon } from 'lucide-vue-next';
+import { X, Save, User, Camera, Image as ImageIcon, BookOpen, Sparkles } from 'lucide-vue-next';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -10,6 +10,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'close'): void;
+  (e: 'open-summary', turnCount: number): void;
 }>();
 
 const gameStore = useGameStore();
@@ -18,8 +19,11 @@ const player = computed(() => gameStore.state.player);
 // Form State
 const formData = ref({
   name: '',
-  persona: ''
+  persona: '',
+  storySummary: ''
 });
+
+const summaryTurnCount = ref(20);
 
 // Initialize form data when modal opens
 watch(() => props.isOpen, (newVal) => {
@@ -42,6 +46,15 @@ watch(() => props.isOpen, (newVal) => {
       // Not JSON, use raw text
       formData.value.persona = rawPersona;
     }
+
+    formData.value.storySummary = player.value.storySummary || '';
+  }
+});
+
+// Watch for store changes to storySummary (for auto-populate)
+watch(() => player.value.storySummary, (newVal) => {
+  if (newVal) {
+    formData.value.storySummary = newVal;
   }
 });
 
@@ -72,9 +85,16 @@ function handleSave() {
   // Update GameStore
   gameStore.state.player.name = formData.value.name;
   gameStore.state.player.persona = finalPersona;
+  gameStore.state.player.storySummary = formData.value.storySummary;
 
   audioManager.playLevelUp(); // Success sound
   emit('close');
+}
+
+function handleStartSummary() {
+  audioManager.playClick();
+  emit('open-summary', summaryTurnCount.value);
+  // We don't close the modal here because we want to see the summary being populated
 }
 
 // Avatar Upload & Crop Logic
@@ -130,22 +150,83 @@ function handleMouseDown(e: MouseEvent) {
   cropperState.value.startY = e.clientY - cropperState.value.y;
 }
 
+function clampState() {
+  if (!cropperImage.value) return;
+  const img = cropperImage.value;
+  const targetSize = 200; // The size of our circular crop area
+
+  // 1. Ensure scale is not too small (must cover the 200px crop area)
+  const minScale = Math.max(targetSize / img.naturalWidth, targetSize / img.naturalHeight);
+  if (cropperState.value.scale < minScale) {
+    cropperState.value.scale = minScale;
+  }
+
+  // 2. Clamp x and y to keep the image covering the 200px crop area
+  // The image is centered at (0,0) in our coordinate system initially.
+  // Its scaled dimensions are:
+  const sw = img.naturalWidth * cropperState.value.scale;
+  const sh = img.naturalHeight * cropperState.value.scale;
+
+  // The crop area is from -100 to +100 in our coordinate system.
+  // The image boundaries are:
+  // left: x - sw/2, right: x + sw/2
+  // top: y - sh/2, bottom: y + sh/2
+  
+  // We need:
+  // x - sw/2 <= -100  =>  x <= sw/2 - 100
+  // x + sw/2 >= 100   =>  x >= 100 - sw/2
+  // y - sh/2 <= -100  =>  y <= sh/2 - 100
+  // y + sh/2 >= 100   =>  y >= 100 - sh/2
+
+  const limitX = Math.max(0, sw / 2 - targetSize / 2);
+  const limitY = Math.max(0, sh / 2 - targetSize / 2);
+
+  cropperState.value.x = Math.max(-limitX, Math.min(limitX, cropperState.value.x));
+  cropperState.value.y = Math.max(-limitY, Math.min(limitY, cropperState.value.y));
+}
+
 function handleMouseMove(e: MouseEvent) {
   if (!cropperState.value.dragging) return;
   e.preventDefault();
   cropperState.value.x = e.clientX - cropperState.value.startX;
   cropperState.value.y = e.clientY - cropperState.value.startY;
+  clampState();
 }
 
 function handleMouseUp() {
   cropperState.value.dragging = false;
+  clampState();
 }
 
 function handleWheel(e: WheelEvent) {
   e.preventDefault();
-  const scaleStep = 0.1;
-  const newScale = cropperState.value.scale - Math.sign(e.deltaY) * scaleStep;
-  cropperState.value.scale = Math.max(0.1, Math.min(5, newScale));
+  const zoomFactor = 1.1;
+  const delta = e.deltaY > 0 ? 1 / zoomFactor : zoomFactor;
+  const newScale = cropperState.value.scale * delta;
+  
+  cropperState.value.scale = Math.max(0.01, Math.min(20, newScale));
+  clampState();
+}
+
+function onImageLoad(e: Event) {
+  const img = e.target as HTMLImageElement;
+  if (!img.naturalWidth || !img.naturalHeight) return;
+
+  // The crop circle is 200px
+  const targetSize = 200;
+  
+  // Calculate scale to fit the image reasonably
+  // We want the image to initially cover the crop area
+  const scaleX = targetSize / img.naturalWidth;
+  const scaleY = targetSize / img.naturalHeight;
+  
+  // Start with a scale that fits the image nicely in the 400px view area
+  // but ensures it's at least as big as the 200px crop circle
+  const fitScale = Math.max(scaleX, scaleY) * 1.2; // 1.2x margin
+  
+  cropperState.value.scale = fitScale;
+  cropperState.value.x = 0;
+  cropperState.value.y = 0;
 }
 
 async function handleCropConfirm() {
@@ -286,6 +367,38 @@ async function handleCropConfirm() {
              ></textarea>
           </div>
 
+          <!-- Story Summary Section -->
+          <div class="space-y-4 pt-4 border-t border-izakaya-wood/10">
+             <div class="flex items-center justify-between">
+                <div class="space-y-1">
+                   <label class="text-sm font-bold text-izakaya-wood dark:text-stone-300 flex items-center gap-2">
+                     <BookOpen class="w-4 h-4" />
+                     故事大总结
+                   </label>
+                   <p class="text-xs text-izakaya-wood/60 dark:text-stone-500">
+                     总结当前剧情进度，作为长期记忆的一部分。
+                   </p>
+                </div>
+                <div class="flex items-center gap-3">
+                   <div class="flex flex-col items-end gap-1">
+                      <span class="text-[10px] text-izakaya-wood/40 uppercase font-bold">回顾轮数: {{ summaryTurnCount }}</span>
+                      <input type="range" v-model="summaryTurnCount" min="5" max="100" step="5" class="w-24 accent-touhou-red" />
+                   </div>
+                   <button @click="handleStartSummary" class="flex items-center gap-1.5 px-3 py-1.5 bg-izakaya-wood/10 hover:bg-izakaya-wood/20 text-izakaya-wood dark:text-stone-300 rounded-lg text-xs font-bold transition-all active:scale-95">
+                      <Sparkles class="w-3.5 h-3.5 text-touhou-red" />
+                      开始总结
+                   </button>
+                </div>
+             </div>
+             
+             <textarea 
+               v-model="formData.storySummary"
+               rows="6"
+               class="w-full bg-white dark:bg-stone-800 border border-izakaya-wood/20 rounded-lg px-4 py-3 text-sm text-izakaya-wood dark:text-stone-200 focus:ring-2 focus:ring-touhou-red/30 outline-none resize-none custom-scrollbar leading-relaxed"
+               placeholder="点击上方按钮生成总结，或手动输入..."
+             ></textarea>
+          </div>
+
         </div>
 
         <!-- Footer -->
@@ -325,6 +438,7 @@ async function handleCropConfirm() {
                     transform: `translate(${cropperState.x}px, ${cropperState.y}px) scale(${cropperState.scale})` 
                   }"
                   draggable="false"
+                  @load="onImageLoad"
              />
           </div>
 

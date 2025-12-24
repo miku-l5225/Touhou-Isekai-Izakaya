@@ -63,7 +63,7 @@ const VALID_PLAYER_FIELDS = new Set([
   'name', 'hp', 'max_hp', 'mp', 'max_mp', 'money', 'power', 'reputation',
   'identity', 'persona', 'clothing', 'location', 'residence', 'time', 'date',
   'authorities', 'items', 'spell_cards', 'combatLevel', 'combatExp', 'skillPoints', 'unlockedTalents',
-  'avatarUrl', 'referenceImageUrl'
+  'avatarUrl', 'referenceImageUrl', 'storySummary'
 ]);
 
 export const useGameStore = defineStore('game', () => {

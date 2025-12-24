@@ -535,8 +535,23 @@ MP：${p.mp}/${p.max_mp}
     // 8. Long Term Memory (Dynamic)
     this.blockHandlers['long_term_memory'] = async (ctx, content) => {
       // Content here is passed from the build() call (the retrieved memories)
+      const gameStore = useGameStore();
+      const storySummary = gameStore.state.player.storySummary;
+      
+      let finalContent = '';
+      
+      // Inject Story Summary if exists
+      if (storySummary && storySummary.trim()) {
+        finalContent += `<story_summary>\n${storySummary}\n</story_summary>\n\n`;
+      }
+      
+      // Inject Retrieved Memories
       if (content && content.trim()) {
-         this.addSection(ctx, 'long_term_memory', '长期记忆', 'system', `<memories>\n${content}\n</memories>`);
+         finalContent += `<memories>\n${content}\n</memories>`;
+      }
+      
+      if (finalContent.trim()) {
+         this.addSection(ctx, 'long_term_memory', '长期记忆', 'system', finalContent);
       }
     };
   }

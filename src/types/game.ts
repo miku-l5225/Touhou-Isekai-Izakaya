@@ -39,6 +39,7 @@ export interface PlayerStatus {
   // Visuals
   avatarUrl?: string; // Cropped avatar URL (data URI or path)
   referenceImageUrl?: string; // Original design image URL for AI reference
+  storySummary?: string; // Long-term story summary
   
   // Collections
   authorities: string[];
@@ -172,7 +173,8 @@ export const INITIAL_GAME_STATE: GameState = {
     items: [],
     spell_cards: [],
     avatarUrl: '',
-    referenceImageUrl: ''
+    referenceImageUrl: '',
+    storySummary: ''
   },
   npcs: {},
   system: {

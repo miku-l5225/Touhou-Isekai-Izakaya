@@ -80,7 +80,7 @@ const DEFAULT_LLM_CONFIGS: Record<string, LLMConfig> = {
     provider: { baseUrl: '', apiKey: '' },
     model: '',
     stream: false,
-    timeout: 60000,
+    timeout: 300000, // Increased to 5min for long combat narrations
     temperature: 0.3
   },
   drawing: {
@@ -104,7 +104,7 @@ export const useSettingsStore = defineStore('settings', () => {
   });
 
   const llmConfigs = ref<Record<string, LLMConfig>>(_.cloneDeep(DEFAULT_LLM_CONFIGS));
-  const enableMemoryRefinement = ref(true); // Default to enabled
+  const enableMemoryRefinement = ref(false); // Default to disabled
   const enableManagementSystem = ref(false); // Toggle for Izakaya Management System
   const useDefaultTilemap = ref(false); // Debug: Use hardcoded map instead of LLM generated one
   

@@ -4,17 +4,19 @@ import { computed, ref } from 'vue';
 import { 
   Coins, Heart, MapPin, Clock, Zap, Star, User, Shield, Package, Sparkles, X, 
   GitBranch, Lock, Check, Sword, Activity, Wind, Target, Brain, 
-  Flame, Droplets, Sun, Moon, Search, HelpCircle, Camera
+  Flame, Droplets, Sun, Moon, Search, HelpCircle, Camera, Home
 } from 'lucide-vue-next';
 import { audioManager } from '@/services/audio';
 import { TALENTS } from '@/data/talents';
 
 import PlayerConfigModal from './PlayerConfigModal.vue';
+import FacilityPanel from './FacilityPanel.vue';
 
 const gameStore = useGameStore();
 
 const emit = defineEmits<{
   (e: 'open-help', sectionId?: string): void;
+  (e: 'open-summary', turnCount: number): void;
 }>();
 
 const player = computed(() => gameStore.state.player);
@@ -26,6 +28,14 @@ function openPlayerConfig() {
   showPlayerConfig.value = true;
   audioManager.playSoftClick();
 }
+
+defineExpose({
+  openPlayerConfig,
+  handleOpenItems,
+  handleOpenTalentTree,
+  handleOpenSpells,
+  handleOpenFacility
+});
 
 // Talent Tree Logic
 const activeTalentTab = ref<'combat' | 'knowledge'>('combat');
@@ -223,6 +233,7 @@ const reputationLabel = computed(() => {
 const showItemsModal = ref(false);
 const showSpellsModal = ref(false);
 const showTalentTreeModal = ref(false);
+const showFacilityModal = ref(false);
 const selectedItem = ref<any>(null);
 const selectedSpell = ref<any>(null);
 
@@ -238,6 +249,11 @@ function handleOpenSpells() {
 
 function handleOpenTalentTree() {
   showTalentTreeModal.value = true;
+  audioManager.playPageFlip();
+}
+
+function handleOpenFacility() {
+  showFacilityModal.value = true;
   audioManager.playPageFlip();
 }
 
@@ -265,6 +281,11 @@ function handleCloseSpells() {
 
 function handleCloseTalentTree() {
   showTalentTreeModal.value = false;
+  audioManager.playSoftClick();
+}
+
+function handleCloseFacility() {
+  showFacilityModal.value = false;
   audioManager.playSoftClick();
 }
 
@@ -453,10 +474,20 @@ function formatBuffEffect(effect: any) {
         </div>
     </div>
 
-    <!-- Location -->
-    <div class="flex items-center gap-2 text-sm bg-white/40 border border-izakaya-wood/10 p-2.5 rounded-lg text-izakaya-wood shadow-sm relative z-10 hover:bg-white/60 transition-colors">
-      <MapPin class="w-4 h-4 text-touhou-red animate-bounce" />
-      <span class="font-medium font-display truncate">{{ player.location }}</span>
+    <!-- Location & Facility -->
+    <div class="flex items-center gap-2 relative z-10">
+      <div class="flex-1 flex items-center gap-2 text-sm bg-white/40 border border-izakaya-wood/10 p-2.5 rounded-lg text-izakaya-wood shadow-sm hover:bg-white/60 transition-colors truncate">
+        <MapPin class="w-4 h-4 text-touhou-red animate-bounce flex-shrink-0" />
+        <span class="font-medium font-display truncate">{{ player.location }}</span>
+      </div>
+      
+      <button 
+        @click="handleOpenFacility"
+        class="p-2.5 bg-white/40 hover:bg-white/80 hover:shadow-md rounded-lg transition-all duration-300 border border-izakaya-wood/10 hover:border-touhou-red/30 group"
+        title="查看设施"
+      >
+        <Home class="w-4 h-4 text-izakaya-wood/60 group-hover:text-touhou-red transition-colors" />
+      </button>
     </div>
 
     <!-- Interactive Collections -->
@@ -742,7 +773,7 @@ function formatBuffEffect(effect: any) {
                   <span class="font-mono font-bold text-green-700">{{ player.skillPoints || 0 }}</span>
                </div>
                <button 
-                  @click="emit('open-help', 'talent-tree')" 
+                  @click="handleCloseTalentTree(); emit('open-help', 'talent-tree')" 
                   class="text-izakaya-wood/50 hover:text-touhou-red transition-colors bg-white/50 rounded-full p-1.5 hover:bg-white"
                   title="帮助与引导"
                >
@@ -940,7 +971,14 @@ function formatBuffEffect(effect: any) {
     </Teleport>
 
     <!-- Player Config Modal -->
-    <PlayerConfigModal :is-open="showPlayerConfig" @close="showPlayerConfig = false" />
+    <PlayerConfigModal 
+      :is-open="showPlayerConfig" 
+      @close="showPlayerConfig = false" 
+      @open-summary="(count) => emit('open-summary', count)"
+    />
+
+    <!-- Facility Modal -->
+    <FacilityPanel :is-open="showFacilityModal" @close="handleCloseFacility" />
   </div>
 </template>
 

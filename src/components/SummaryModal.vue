@@ -2,9 +2,11 @@
 import { ref, watch } from 'vue';
 import { useChatStore } from '@/stores/chat';
 import { useSaveStore } from '@/stores/save';
+import { useGameStore } from '@/stores/game';
+import { audioManager } from '@/services/audio';
 import { db } from '@/db';
 import { generateCompletion } from '@/services/llm';
-import { X, Loader2, Copy, RefreshCw, FileText } from 'lucide-vue-next';
+import { X, Loader2, Copy, RefreshCw, FileText, Check, Sparkles } from 'lucide-vue-next';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -15,11 +17,24 @@ const emit = defineEmits(['close']);
 
 const chatStore = useChatStore();
 const saveStore = useSaveStore();
+const gameStore = useGameStore();
 
 const summary = ref('');
 const loading = ref(false);
 const error = ref('');
 const currentTurnCount = ref(20);
+const hasApplied = ref(false);
+
+function handleApplyToPersona() {
+  if (!summary.value) return;
+  gameStore.state.player.storySummary = summary.value;
+  hasApplied.value = true;
+  audioManager.playLevelUp();
+  setTimeout(() => {
+    hasApplied.value = false;
+    emit('close');
+  }, 1000);
+}
 
 // Update currentTurnCount when prop changes or on open
 watch(() => props.isOpen, (newVal) => {
@@ -181,7 +196,16 @@ function copyToClipboard() {
         </div>
 
         <!-- Footer -->
-        <div class="p-4 border-t border-izakaya-wood/10 bg-white/50 flex justify-end gap-3 relative z-10">
+        <div class="p-4 border-t border-izakaya-wood/10 bg-white/50 flex justify-end items-center gap-3 relative z-10">
+             <button v-if="!loading && summary" 
+                     @click="handleApplyToPersona" 
+                     class="mr-auto px-4 py-2 flex items-center gap-2 text-sm font-bold bg-touhou-red/10 text-touhou-red hover:bg-touhou-red/20 rounded-lg transition-all active:scale-95 border border-touhou-red/20"
+                     :disabled="hasApplied">
+                <Check v-if="hasApplied" class="w-4 h-4" />
+                <Sparkles v-else class="w-4 h-4" /> 
+                {{ hasApplied ? '已应用到设定' : '应用到角色设定' }}
+             </button>
+             
              <button v-if="!loading && summary" @click="copyToClipboard" class="px-4 py-2 flex items-center gap-2 text-sm text-izakaya-wood hover:bg-black/5 rounded transition-colors border border-transparent hover:border-izakaya-wood/10">
                 <Copy class="w-4 h-4" /> 复制
              </button>

@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useGameStore } from '@/stores/game';
 import { audioManager } from '@/services/audio';
 import { useToastStore } from '@/stores/toast';
-import { X, Save, Volume2, VolumeX, Music, FileText, Palette, CheckCircle, Image as ImageIcon, RefreshCw, AlertCircle, Check } from 'lucide-vue-next';
+import { X, Save, Volume2, VolumeX, Music, Palette, CheckCircle, Image as ImageIcon, RefreshCw, AlertCircle, Check } from 'lucide-vue-next';
 import LLMConfigPanel from './LLMConfigPanel.vue';
 import { fetchModels, type ModelInfo } from '@/services/llm';
 import { 
@@ -17,19 +17,17 @@ import { generateMap, DEFAULT_MAP_DATA } from '@/services/management/MapGenerato
 
 const props = defineProps<{
   isOpen: boolean;
-  initialTab?: 'global' | 'chat' | 'logic' | 'memory' | 'misc' | 'audio' | 'summary' | 'interface' | 'drawing' | 'debug';
+  initialTab?: 'global' | 'chat' | 'logic' | 'memory' | 'misc' | 'audio' | 'interface' | 'drawing' | 'debug';
 }>();
 
 const emit = defineEmits<{
   (e: 'close'): void;
-  (e: 'open-summary', turnCount: number): void;
 }>();
 
 const settingsStore = useSettingsStore();
 const gameStore = useGameStore();
 const toastStore = useToastStore();
-const activeTab = ref<'global' | 'chat' | 'logic' | 'memory' | 'misc' | 'audio' | 'summary' | 'interface' | 'drawing' | 'debug'>('global');
-const summaryTurnCount = ref(20);
+const activeTab = ref<'global' | 'chat' | 'logic' | 'memory' | 'misc' | 'audio' | 'interface' | 'drawing' | 'debug'>('global');
 
 // Drawing Models State
 const drawingModels = ref<ModelInfo[]>([]);
@@ -119,7 +117,6 @@ const tabs = [
   { id: 'logic', label: '逻辑 (LLM #2)' },
   { id: 'memory', label: '记忆 (LLM #3)' },
   { id: 'misc', label: '杂项 (LLM #4)' },
-  { id: 'summary', label: '故事大总结' },
   { id: 'audio', label: '音效与交互' },
   { id: 'drawing', label: 'AI 插画' },
   { id: 'debug', label: '调试 (Debug)' },
@@ -223,12 +220,6 @@ watch(
     }
   }
 );
-
-function handleStartSummary() {
-  audioManager.playClick();
-  emit('open-summary', summaryTurnCount.value);
-  emit('close');
-}
 
 const isCustomNovelAIModel = computed(() => {
   const model = settingsStore.drawingConfig.model;
@@ -735,47 +726,6 @@ function handleVolumeChangeTest() {
                   </div>
                 </div>
              </div>
-          </div>
-
-          <!-- Summary Settings -->
-          <div v-show="activeTab === 'summary'" class="space-y-6 animate-fade-in">
-            <div class="bg-white/40 p-4 rounded-lg border border-izakaya-wood/10">
-              <h3 class="font-display font-bold text-lg mb-2 flex items-center gap-2 text-izakaya-wood">
-                <FileText class="w-5 h-5 text-touhou-red" />
-                总结配置
-              </h3>
-              <p class="text-sm text-izakaya-wood/70 mb-4 font-serif">
-                大总结功能将调用 LLM #1（对话模型）对近期剧情进行全方位的回顾与总结。
-              </p>
-              
-              <div class="space-y-2">
-                <label class="block text-sm font-bold text-izakaya-wood font-display">包含最近对话轮数</label>
-                <div class="flex items-center gap-4">
-                  <input 
-                    type="range" 
-                    v-model.number="summaryTurnCount" 
-                    min="5" 
-                    max="100" 
-                    step="5"
-                    class="flex-1 h-2 bg-izakaya-wood/10 rounded-lg appearance-none cursor-pointer accent-touhou-red"
-                  >
-                  <span class="w-12 text-center font-bold font-display bg-white/50 px-2 py-1 rounded text-izakaya-wood">{{ summaryTurnCount }}</span>
-                </div>
-                <p class="text-xs text-izakaya-wood/50 font-serif">
-                  从当前回合倒推，读取最近 {{ summaryTurnCount }} 轮对话内容作为总结依据。
-                </p>
-              </div>
-            </div>
-
-            <div class="flex justify-center mt-8">
-              <button 
-                @click="handleStartSummary"
-                class="px-8 py-3 bg-izakaya-wood hover:bg-izakaya-wood/90 text-white rounded-full font-display text-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2"
-              >
-                <FileText class="w-5 h-5" />
-                开始生成总结
-              </button>
-            </div>
           </div>
 
           <!-- Audio Settings -->

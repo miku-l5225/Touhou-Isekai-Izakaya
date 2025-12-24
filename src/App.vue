@@ -60,6 +60,7 @@ const shouldRegenerateMap = computed({
 });
 
 const chatContainer = ref<HTMLElement | null>(null);
+const statusCardRef = ref<any>(null);
 const isSettingsOpen = ref(false);
 const isCharEditorOpen = ref(false);
 const isSaveManagerOpen = ref(false);
@@ -216,6 +217,31 @@ function handleHelpAction(action: string) {
     case 'openPromptBuilder':
       isPromptBuilderOpen.value = true;
       break;
+    case 'openPlayerConfig':
+      if (statusCardRef.value) {
+        statusCardRef.value.openPlayerConfig();
+      }
+      break;
+    case 'openItems':
+      if (statusCardRef.value) {
+        statusCardRef.value.handleOpenItems();
+      }
+      break;
+    case 'openTalentTree':
+      if (statusCardRef.value) {
+        statusCardRef.value.handleOpenTalentTree();
+      }
+      break;
+    case 'openSpells':
+      if (statusCardRef.value) {
+        statusCardRef.value.handleOpenSpells();
+      }
+      break;
+    case 'openFacility':
+      if (statusCardRef.value) {
+        statusCardRef.value.handleOpenFacility();
+      }
+      break;
     case 'highlightQuests':
     case 'highlightCharacters':
       // TODO: Maybe scroll to or highlight these sections?
@@ -300,7 +326,7 @@ function handleHelpAction(action: string) {
       
       <!-- Left Sidebar (Status) -->
       <aside class="w-72 bg-izakaya-paper/60 backdrop-blur-md border-r border-izakaya-wood/10 p-4 hidden md:flex flex-col gap-4 h-full shadow-[2px_0_10px_rgba(0,0,0,0.02)] overflow-y-auto custom-scrollbar">
-        <StatusCard class="flex-shrink-0" @open-help="handleOpenHelp" />
+        <StatusCard ref="statusCardRef" class="flex-shrink-0" @open-help="handleOpenHelp" @open-summary="handleOpenSummary" />
         <QuestList class="flex-1 min-h-[300px]" />
       </aside>
 

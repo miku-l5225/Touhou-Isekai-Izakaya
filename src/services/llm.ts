@@ -17,10 +17,33 @@ export interface CompletionOptions {
 
 export async function generateCompletion(options: CompletionOptions): Promise<string> {
   const settingsStore = useSettingsStore();
-  const config = settingsStore.getEffectiveConfig(options.modelType || 'memory'); // Default to memory for utility tasks
+  
+  // 1. Determine model type and fallback if necessary
+  let modelType = options.modelType || 'memory';
+  let config = settingsStore.getEffectiveConfig(modelType);
 
+  // Fallback chain: If the requested utility model is not configured, try 'logic', then 'chat'
+  const isUtilityModel = ['memory', 'misc', 'drawing'].includes(modelType);
+  
+  if (!config.apiKey && isUtilityModel) {
+    console.warn(`[LLM] Model type '${modelType}' not configured (missing API Key). Falling back to 'logic'.`);
+    modelType = 'logic';
+    config = settingsStore.getEffectiveConfig(modelType);
+  }
+
+  if (!config.apiKey && modelType === 'logic') {
+    console.warn(`[LLM] Model type 'logic' not configured (missing API Key). Falling back to 'chat'.`);
+    modelType = 'chat';
+    config = settingsStore.getEffectiveConfig(modelType);
+  }
+
+  // 2. Final check for API Key
   if (!config.apiKey) {
-    throw new Error(`API Key not configured for ${options.modelType || 'memory'} model`);
+    const modelNumbers: Record<string, number> = { chat: 1, logic: 2, memory: 3, misc: 4, drawing: 5 };
+    const num = modelNumbers[modelType] || '?';
+    const errorMsg = `模型 '${modelType}' (LLM #${num}) 未配置 API Key，且无有效备选模型。请在设置中检查配置。`;
+    console.error(`[LLM] ${errorMsg}`);
+    throw new Error(errorMsg);
   }
 
   const openai = new OpenAI({

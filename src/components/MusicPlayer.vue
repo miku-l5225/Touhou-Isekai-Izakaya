@@ -41,9 +41,22 @@ watch(isCombatActive, (active) => {
 });
 
 // Draggable logic
-const position = ref({ x: window.innerWidth - 300, y: window.innerHeight - 100 });
+const getDefaultPosition = () => ({ 
+  x: window.innerWidth - 300, 
+  y: window.innerHeight - 100 
+});
+
+const position = ref(getDefaultPosition());
 const isDragging = ref(false);
 const dragOffset = ref({ x: 0, y: 0 });
+
+function handleResize() {
+  // Check if current position is out of bounds
+  if (position.value.x > window.innerWidth || position.value.y > window.innerHeight || 
+      position.value.x < -200 || position.value.y < -50) {
+    position.value = getDefaultPosition();
+  }
+}
 
 function startDrag(e: MouseEvent) {
   if (showSettings.value) return; // Don't drag when settings are open
@@ -72,10 +85,14 @@ function stopDrag() {
 
 onUnmounted(() => {
   stopDrag();
+  window.removeEventListener('resize', handleResize);
 });
 
 onMounted(() => {
   store.init();
+  window.addEventListener('resize', handleResize);
+  // Ensure we start at default position every time the component mounts (page entry)
+  position.value = getDefaultPosition();
 });
 
 const progress = computed({

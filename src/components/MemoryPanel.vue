@@ -128,6 +128,29 @@ function formatContent(content: any) {
     const str = typeof content === 'string' ? content : JSON.stringify(content);
     if (str.trim().startsWith('{') || str.trim().startsWith('[')) {
       const obj = JSON.parse(str);
+      
+      // Handle old variable_change array or JSON objects
+      if (Array.isArray(obj)) {
+        return obj.map(a => {
+          if (a.type === 'UPDATE_PLAYER') {
+            const isMoney = ['money', '金钱', '持有金钱'].includes(a.field);
+            if (!isMoney) return null; // Skip non-money player stats in this view
+            const opStr = a.op === 'add' ? '+' : (a.op === 'subtract' ? '-' : '=');
+            return `${a.field}: ${opStr}${a.value}`;
+          }
+          if (a.type === 'INVENTORY') {
+            const isItem = ['items', '物品', 'spell_cards', '符卡'].includes(a.target);
+            if (!isItem) return null; 
+            const opStr = (a.op === 'add' || a.op === 'push') ? '获得' : '失去';
+            const itemName = typeof a.value === 'string' ? a.value : (a.value?.name || a.value?.id || '未知物品');
+            const count = typeof a.value === 'object' ? (a.value?.count || 1) : 1;
+            const typeLabel = (a.target === 'spell_cards' || a.target === '符卡') ? '符卡' : '物品';
+            return `${opStr}${typeLabel}: ${itemName} x${count}`;
+          }
+          return null; // Skip everything else (NPC updates, etc.)
+        }).filter(Boolean).join('\n');
+      }
+
       // Format Alliance/Intelligence
       if (obj.name && obj.content) {
         let res = `【${obj.name}】\n${obj.content}`;
@@ -160,7 +183,7 @@ function getTypeIcon(type: string) {
 function getTypeLabel(type: string) {
   switch (type) {
     case 'summary': return '摘要';
-    case 'variable_change': return '变量';
+    case 'variable_change': return '财产/道具';
     case 'facility': return '设施';
     case 'alliance': return '联盟';
     case 'intelligence': return '情报';
@@ -200,6 +223,7 @@ function getTypeLabel(type: string) {
         <select v-model="filterType" class="px-3 py-2 text-sm border border-izakaya-wood/20 rounded-md bg-white/50 focus:outline-none focus:ring-2 focus:ring-touhou-red/20 focus:border-touhou-red/50 transition-all text-izakaya-wood cursor-pointer hover:bg-white/80">
           <option value="all">全部类型</option>
           <option value="summary">剧情摘要</option>
+          <option value="variable_change">财产/道具</option>
           <option value="facility">设施变动</option>
           <option value="alliance">长期联盟</option>
           <option value="intelligence">已知情报</option>

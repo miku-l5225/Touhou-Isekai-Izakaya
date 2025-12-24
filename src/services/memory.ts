@@ -23,8 +23,20 @@ Output Format (JSON):
   "entities": ["Specific NPC Names", "Locations", "Unique Items"],
   "tags": ["Specific Topics", "Actions", "Emotions", "Plot Keywords"],
   "importance": 1-5 (5 is critical plot point, 1 is trivial),
-  "facility": "If player acquired/modified/renovated any building, place, property or facility that the player OWNS or has ACCESS TO, describe it with: 地点：[使用该区域的标准地点名称，如'博丽神社'、'雾之湖'、'人间之里'等，不要使用'博丽神社正殿前'这样的具体位置]，介绍：[设施简要介绍]，子地点：[设施内的具体子地点]，人员：[设施相关人员]。If no facility changes, leave empty. 注意：地点字段应使用该区域的标准名称，便于后续匹配。\n\n重要：只记录玩家拥有或可以使用控制的设施，不要记录幻想乡中原本就存在的公共设施（如博丽神社、红魔馆等），除非玩家真正获得了这些设施的所有权或管理权。\n\n设施包括但不限于：房屋、店铺、酒馆、农田、牧场、工坊、仓库、学校、医院、市场、公园、桥梁、道路、井、池塘、花园、温泉、矿山、森林、洞穴、城堡、要塞等任何玩家拥有或可以使用的固定建筑和场所。",
-  "facility_name": "If there is a facility change, provide the specific name of player-owned facility (e.g., '玩家的酒馆', '雾之湖农田', '人间之里工坊', '主角的房屋'). If no facility change, leave empty. This should be a concise name that can be easily matched in conversation.",
+  "facility": {
+    "name": "Specific name of player-owned facility (e.g., '玩家的酒馆', '主角的房屋'). If no change, leave empty.",
+    "location": "Standard area name (e.g., '博丽神社', '人间之里'). Must be the general area, not specific spot.",
+    "description": "Brief description of the facility's function, quality, and current state.",
+    "status": "Operational status keyword (e.g., '正常', '扩建中', '装修中', '荒废', '经营中').",
+    "sub_locations": [
+      {
+        "name": "Sub-area name (e.g., '厨房', '仓库', '客房')",
+        "description": "Specific condition, level, or contents of this sub-area."
+      }
+    ],
+    "staff": ["Names of NPCs working at or managing this facility"],
+    "is_new_acquisition": "boolean, true if the player just gained ownership of this facility this turn"
+  },
   "alliance": {
     "name": "Name of the alliance/partnership",
     "content": "Terms, goals, and nature of the alliance",
@@ -88,10 +100,18 @@ export class MemoryService {
   ) {
     // 1. Save "Hard" Memories (Variable Changes) based on Actions
     // These are objective facts derived from the Logic System's output.
+    // [Optimization] Only record critical management-related changes (Money & Items) as hard memories.
     if (actions && actions.length > 0) {
-      const variableChanges = actions.filter(a => 
-        ['UPDATE_PLAYER', 'UPDATE_NPC', 'INVENTORY'].includes(a.type)
-      );
+      const variableChanges = actions.filter(a => {
+        if (a.type === 'UPDATE_PLAYER') {
+          return ['money', '金钱', '持有金钱'].includes(a.field);
+        }
+        if (a.type === 'INVENTORY') {
+          // Record items and spell cards as "hard" variable memories
+          return ['items', '物品', 'spell_cards', '符卡'].includes(a.target);
+        }
+        return false; // Skip NPC favorability, HP/MP, etc. (handled by summary/current state)
+      });
 
       if (variableChanges.length > 0) {
         // [Fix] Prevent duplicates: Delete existing variable_change for this turn
@@ -102,13 +122,47 @@ export class MemoryService {
         const gameStore = useGameStore();
         const charStore = useCharacterStore();
         
+        // Format readable content for memory injection
+        const readableContent = variableChanges.map(a => {
+          if (a.type === 'UPDATE_PLAYER') {
+            const fieldMap: Record<string, string> = { 
+              'money': '金钱', 
+              '金钱': '金钱', 
+              '持有金钱': '金钱'
+            };
+            const fieldName = fieldMap[a.field || ''] || a.field;
+            const opStr = a.op === 'add' ? '+' : (a.op === 'subtract' ? '-' : '=');
+            return `${fieldName}: ${opStr}${a.value}`;
+          } else if (a.type === 'INVENTORY') {
+            const isAdd = a.op === 'add' || a.op === 'push';
+            const opStr = isAdd ? '获得' : '失去';
+            let itemName = '未知物品';
+            let count = 1;
+
+            if (typeof a.value === 'string') {
+              itemName = a.value.split(',')[0].trim();
+            } else if (a.value && typeof a.value === 'object') {
+              itemName = a.value.name || a.value.id || '未知物品';
+              count = a.value.count || 1;
+            }
+            return `${opStr}物品: ${itemName} x${count}`;
+          }
+          return '';
+        }).filter(Boolean).join('\n');
+
+        const tags = ['system', 'variable'];
+        variableChanges.forEach(a => {
+          if (a.type === 'UPDATE_PLAYER') tags.push('金钱', 'player');
+          if (a.type === 'INVENTORY') tags.push('物品', 'inventory');
+        });
+
         await db.memories.add({
           saveSlotId,
           turnCount,
           type: 'variable_change',
-          content: JSON.stringify(variableChanges),
+          content: readableContent,
           related_entities: this.extractEntityIdsFromActions(variableChanges, charStore.characters, gameStore.state.npcs),
-          tags: ['system', 'variable', ...variableChanges.map(a => a.type)],
+          tags: [...new Set(tags)],
           importance: 2, // Default importance for stat changes
           createdAt: Date.now(),
           gameDate: context?.date,
@@ -169,36 +223,38 @@ ${JSON.stringify(actions)}
       }
 
       // [Fix] Prevent duplicates for facilities
-      // Since we might have multiple facility entries (though unlikely), we clear all 'facility' types for this turn first
-      if (result.facility || result.facility_name) {
+      if (result.facility && result.facility.name) {
           await db.memories.where('[saveSlotId+type+turnCount]')
             .equals([saveSlotId, 'facility', turnCount])
             .delete();
-      }
 
-      const hasFacility = result.facility && typeof result.facility === 'string' && result.facility.trim();
-      const hasFacilityName = result.facility_name && typeof result.facility_name === 'string' && result.facility_name.trim();
-
-      if (hasFacility || hasFacilityName) {
-        const content = hasFacility ? result.facility : `设施变更: ${result.facility_name}`;
-        const tags = ['facility', ...(result.tags || [])];
-        const entities = [...(result.entities || [])];
+        const f = result.facility;
+        const subLocs = f.sub_locations?.map((sl: any) => `${sl.name}(${sl.description || '正常'})`).join('、') || '无';
+        const staff = f.staff?.length > 0 ? f.staff.join('、') : '无';
         
-        if (hasFacilityName) {
-           tags.push(result.facility_name);
-           if (!entities.includes(result.facility_name)) {
-              entities.push(result.facility_name);
-           }
-        }
+        // Build a rich, readable content string
+        let readableFacility = `【${f.name}】\n`;
+        readableFacility += `地点：${f.location || '未知'}\n`;
+        readableFacility += `介绍：${f.description || '无'}\n`;
+        readableFacility += `状态：${f.status || '正常'}${f.is_new_acquisition ? ' (新获得)' : ''}\n`;
+        readableFacility += `子地点：${subLocs}\n`;
+        readableFacility += `人员：${staff}`;
+
+        const tags = ['facility', f.name, ...(result.tags || [])];
+        if (f.location) tags.push(f.location);
+        if (f.status) tags.push(f.status);
+
+        const entities = [...(result.entities || [])];
+        if (!entities.includes(f.name)) entities.push(f.name);
 
         await db.memories.add({
           saveSlotId,
           turnCount,
           type: 'facility',
-          content: content,
+          content: readableFacility,
           related_entities: entities,
-          tags: tags,
-          importance: Math.max(result.importance || 3, 4), // Facility changes are important
+          tags: [...new Set(tags)],
+          importance: Math.max(result.importance || 3, f.is_new_acquisition ? 5 : 4), 
           createdAt: Date.now(),
           gameDate: context?.date,
           gameTime: context?.time,
@@ -268,35 +324,40 @@ ${JSON.stringify(actions)}
     
     console.log('[Memory Retrieval] Refinement mode:', enableRefinement ? 'ENABLED' : 'DISABLED');
 
-    // 1. 条件性包含最近一轮次的设施变动记忆
+    // 1. 条件性包含设施变动记忆（支持多设施）
     try {
-      // 查询最近一轮次的设施记忆（按轮次倒序，取第一条）
-      const lastFacilityMemories = await db.memories
+      // 查询最近的设施记录（获取较多记录以覆盖不同地点）
+      const allRecentFacilities = await db.memories
         .where(['saveSlotId', 'type'])
         .equals([saveSlotId, 'facility'])
         .reverse()
-        .limit(1)
+        .limit(20)
         .toArray();
 
-      if (lastFacilityMemories.length > 0) {
+      if (allRecentFacilities.length > 0) {
         // 获取主角当前位置
         const gameStore = useGameStore();
         const currentLocation = gameStore.state.player.location;
         const normalizedCurrentLocation = this.normalizeLocation(currentLocation);
 
-        console.log('[Memory Retrieval] Checking facility injection. Current Location:', currentLocation, 'Normalized:', normalizedCurrentLocation);
+        // 按设施名去重，只保留每个设施最新的状态
+        const facilityMap = new Map<string, MemoryEntry>();
+        allRecentFacilities.forEach(m => {
+          const name = this.extractFacilityNameFromContent(m.content) || `loc:${this.extractLocationFromFacility(m.content)}`;
+          if (!facilityMap.has(name)) {
+            facilityMap.set(name, m);
+          }
+        });
 
-        // 检查是否应该注入设施记忆
-        const shouldInjectFacilities = lastFacilityMemories.some(memory => {
+        const latestFacilities = Array.from(facilityMap.values());
+
+        console.log(`[Memory Retrieval] Checking ${latestFacilities.length} unique facilities. Current Location:`, currentLocation);
+
+        // 检查哪些设施应该注入
+        const matchedFacilities = latestFacilities.filter(memory => {
           const facilityLocation = this.extractLocationFromFacility(memory.content);
           const facilityName = this.extractFacilityNameFromContent(memory.content);
           
-          console.log('[Memory Retrieval] Found facility memory:', {
-            location: facilityLocation,
-            name: facilityName,
-            content: memory.content
-          });
-
           if (!facilityLocation) return false;
           
           const isLocationMatch = normalizedCurrentLocation === facilityLocation ||
@@ -305,29 +366,19 @@ ${JSON.stringify(actions)}
           
           const isMentionMatch = facilityName && currentInput.includes(facilityName);
 
-          console.log('[Memory Retrieval] Match result:', {
-            isLocationMatch,
-            isMentionMatch,
-            input: currentInput
-          });
-
           return isLocationMatch || isMentionMatch;
         });
 
-        if (shouldInjectFacilities) {
-          console.log('[Memory Retrieval] Injecting facility memory.');
-          result.push(...lastFacilityMemories.map(m => {
+        if (matchedFacilities.length > 0) {
+          console.log(`[Memory Retrieval] Injecting ${matchedFacilities.length} facility memories.`);
+          result.push(...matchedFacilities.map(m => {
             let meta = '';
             if (m.gameDate) meta += `[${m.gameDate} ${m.gameTime || ''}] `;
             if (m.location) meta += `[${m.location}] `;
             if (m.characters && m.characters.length > 0) meta += `(在场: ${m.characters.join(', ')}) `;
             return `<memory type="${m.type}" turn="${m.turnCount}">${meta}${m.content}</memory>`;
           }));
-        } else {
-          console.log('[Memory Retrieval] No facility memory injected (criteria not met).');
         }
-      } else {
-        console.log('[Memory Retrieval] No recent facility memories found.');
       }
     } catch (error) {
       console.error('Failed to retrieve facility memories:', error);
@@ -453,6 +504,24 @@ ${candidates}
       toastStore.addToast(`记忆检索失败: ${error.message}`, 'error');
     }
 
+    // 3. 获取最近的变量变动（硬记忆，如金钱、道具变动）
+    try {
+      const recentVariables = await db.memories
+        .where(['saveSlotId', 'type'])
+        .equals([saveSlotId, 'variable_change'])
+        .reverse()
+        .limit(5)
+        .toArray();
+      
+      if (recentVariables.length > 0) {
+        result.push(...recentVariables.map(m => 
+          `<memory type="variable" turn="${m.turnCount}">${m.content}</memory>`
+        ));
+      }
+    } catch (error) {
+      console.error('Failed to retrieve variable memories:', error);
+    }
+
     return result.join('\n');
   }
 
@@ -509,12 +578,13 @@ ${candidates}
 
   /**
    * 从设施变动条目中提取地点信息
-   * 格式：地点：[设施所在地点]，介绍：[设施简要介绍]，子地点：[设施内的子地点]，人员：[设施相关人员]
+   * 支持新格式：地点：[地点]
+   * 以及旧格式：地点：[地点]，介绍：...
    */
   private extractLocationFromFacility(content: string | any): string | null {
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-    // 使用正则表达式匹配"地点："后面的内容
-    const locationMatch = contentStr.match(/地点：([^，，\n]+)/);
+    // 匹配"地点："后面到换行或逗号之前的内容
+    const locationMatch = contentStr.match(/地点：([^，\n\r]+)/);
     if (locationMatch && locationMatch[1]) {
       return locationMatch[1].trim();
     }
@@ -522,22 +592,26 @@ ${candidates}
   }
 
   /**
-   * 从设施内容中提取设施名称（兼容旧数据）
-   * 旧数据格式：地点：博丽神社，介绍：...
-   * 新数据格式：通过facility_name字段单独存储
+   * 从设施内容中提取设施名称
+   * 支持新格式：【设施名称】
+   * 以及旧格式的推断
    */
   private extractFacilityNameFromContent(content: string | any): string | null {
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-    // 尝试从content中推断设施名称
-    // 如果是"博丽神社，介绍：..."，可以提取"博丽神社"
-    const locationMatch = contentStr.match(/地点：([^，]+)/);
+    
+    // 1. 匹配新格式 【设施名称】
+    const nameMatch = contentStr.match(/【([^】]+)】/);
+    if (nameMatch && nameMatch[1]) {
+      return nameMatch[1].trim();
+    }
+
+    // 2. 兼容旧数据推断
+    const locationMatch = contentStr.match(/地点：([^，\n]+)/);
     if (locationMatch && locationMatch[1]) {
       const location = locationMatch[1].trim();
-      // 如果地点名本身就是一个具体的设施名，直接返回
       if (['博丽神社', '雾之湖', '人间之里', '红魔馆', '白玉楼', '永远亭'].includes(location)) {
         return location;
       }
-      // 否则尝试构造一个合理的设施名
       if (contentStr.includes('酒馆')) return location + '酒馆';
       if (contentStr.includes('农田')) return location + '农田';
       if (contentStr.includes('工坊')) return location + '工坊';
@@ -652,8 +726,8 @@ ${candidates}
   private normalizeLocation(location: string): string {
     if (!location) return '';
     // 匹配：地点 + 分割符 + 其他内容
-    // 支持全角半角符号：、，／,/
-    const match = location.match(/^([^、，／,]+)[、，／,]/);
+    // 支持更多分隔符：、，／ , / | 空格
+    const match = location.match(/^([^、，／,/\s|]+)[、，／,/\s|]/);
     if (match && match[1]) {
       return match[1].trim();
     }
