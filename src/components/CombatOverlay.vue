@@ -1131,6 +1131,9 @@ import { audioManager } from '@/services/audio';
 import defaultSprite from '@/assets/images/battle_sprites/其他角色.png';
 
 const gameStore = useGameStore();
+const props = defineProps<{
+    visible?: boolean;
+}>();
 const emit = defineEmits(['close', 'combat-end']);
 
 // --- BGM Management ---
@@ -1221,7 +1224,14 @@ onMounted(() => {
 const combatState = computed(() => gameStore.state.system.combat);
 const isPending = computed(() => !!combatState.value?.isPending);
 const isActive = computed(() => !!combatState.value?.isActive);
-const showOverlay = computed(() => !!combatState.value && (isActive.value || isPending.value));
+const showOverlay = computed(() => {
+    if (!combatState.value) return false;
+    // If combat is active (started), always show
+    if (isActive.value) return true;
+    // If combat is pending (request stage), only show if visible prop is true
+    if (isPending.value) return !!props.visible;
+    return false;
+});
 
 // --- Interfaces for UI ---
 interface CombatLog {
@@ -1793,6 +1803,7 @@ function skipCombat() {
    audioManager.stopBgm();
    gameStore.updateState({ system: { ...gameStore.state.system, combat: null } });
    toastStore.addToast('已切换至自由剧情模式', 'info');
+   emit('close');
 }
 
 // --- Helper to Sync State ---
@@ -3394,6 +3405,7 @@ function closeCombat() {
     }
   });
 
+  emit('close');
   gameLoop.handleCombatCompletion(resultSummary, finalCombatants);
 }
 

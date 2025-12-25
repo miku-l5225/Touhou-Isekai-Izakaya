@@ -9,6 +9,7 @@ import { COMBAT_NARRATOR_PROMPT } from '@/stores/prompt';
 import { useCharacterStore } from '@/stores/character';
 import { useToastStore } from '@/stores/toast';
 import { resolveCharacterId } from './characterMapping';
+import { confirmState } from '@/utils/confirm';
 
 const LOGIC_SYSTEM_PROMPT = `
 你是一个《东方Project》RPG游戏的“Game Master”逻辑处理器。
@@ -293,6 +294,58 @@ export class LogicService {
     storyContent: string, 
     gameState: any
   ): Promise<LogicResult> {
+    const maxRetries = 3;
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this._executeLogicRequest(userContent, storyContent, gameState);
+      } catch (e: any) {
+        lastError = e;
+        console.warn(`Logic attempt ${attempt} failed:`, e.message);
+        
+        if (attempt < maxRetries) {
+          // Wait before retry: 1s, 2s, 3s...
+          const delay = attempt * 1000;
+          const toastStore = useToastStore();
+          toastStore.addToast(`逻辑模型处理重试中 (${attempt}/${maxRetries})...`, 'warning', 2000);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // If we reach here, all retries failed
+    console.error('Logic Processing Failed after all retries:', lastError);
+    const toastStore = useToastStore();
+    toastStore.addToast(`逻辑模型处理最终失败: ${lastError.message}`, 'error');
+    
+    // 弹出明显的错误提示
+    confirmState.value = {
+      isOpen: true,
+      options: {
+        title: '⚠️ 逻辑处理最终失败',
+        message: `【经过 ${maxRetries} 次重试，本轮变量写入依然失败】\n\n原因: ${lastError.message}\n\n可能原因:\n1. 网络连接持续不稳定或 API 额度耗尽。\n2. AI 输出内容持续无法解析（JSON 语法错误）。\n3. 提示词触发了服务商的安全过滤。\n\n你可以尝试检查网络后重新发送消息。`,
+        confirmText: '我知道了',
+        cancelText: '关闭',
+        destructive: true
+      },
+      resolve: null
+    };
+    
+    // Fallback: return empty result so game doesn't crash
+    return { 
+      actions: [], 
+      quick_replies: [], 
+      summary: `Logic Error after ${maxRetries} retries: ${lastError.message}`,
+      thinking: `Logic processing failed. Error: ${lastError.message}`
+    };
+  }
+
+  private async _executeLogicRequest(
+    userContent: string, 
+    storyContent: string, 
+    gameState: any
+  ): Promise<LogicResult> {
     
     const settingsStore = useSettingsStore();
     const config = settingsStore.getEffectiveConfig('logic');
@@ -504,17 +557,8 @@ export class LogicService {
       return result;
 
     } catch (e: any) {
-      console.error('Logic Processing Failed:', e);
-      const toastStore = useToastStore();
-      toastStore.addToast(`逻辑模型处理失败: ${e.message}`, 'error');
-      
-      // Fallback: return empty result so game doesn't crash
-      return { 
-        actions: [], 
-        quick_replies: [], 
-        summary: `Logic Error: ${e.message}`,
-        thinking: `Logic processing failed. Error: ${e.message}`
-      };
+      // Re-throw to be caught by retry logic in processLogic
+      throw e;
     }
   }
 

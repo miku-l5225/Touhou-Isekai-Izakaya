@@ -1,5 +1,5 @@
 <template>
-  <div v-if="pendingQuest" class="fixed inset-0 bg-stone-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in font-sans">
+  <div v-if="pendingQuest && visible" class="fixed inset-0 bg-stone-900/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in font-sans">
     <div class="group relative bg-stone-50 dark:bg-stone-900 rounded-xl max-w-lg w-full shadow-2xl overflow-hidden transform transition-all border-2 border-izakaya-wood/30">
       <!-- Texture -->
       <div class="absolute inset-0 pointer-events-none opacity-40 bg-texture-rice-paper z-0"></div>
@@ -95,6 +95,12 @@ import { audioManager } from '@/services/audio';
 const gameStore = useGameStore();
 const toastStore = useToastStore();
 
+const props = defineProps<{
+  visible?: boolean;
+}>();
+
+const emit = defineEmits(['close']);
+
 const pendingQuest = computed(() => gameStore.state.system.pending_quest_trigger);
 
 watch(() => pendingQuest.value, (newVal) => {
@@ -133,6 +139,7 @@ function handleAccept() {
     gameStore.addQuest(quest);
     gameStore.setPendingQuest(null);
     toastStore.addToast(`已接受任务：${quest.name}`, 'success');
+    emit('close');
   }
 }
 
@@ -141,6 +148,7 @@ function handleDecline() {
   if (pendingQuest.value) {
     gameStore.setPendingQuest(null);
     toastStore.addToast('已拒绝委托', 'info');
+    emit('close');
   }
 }
 </script>

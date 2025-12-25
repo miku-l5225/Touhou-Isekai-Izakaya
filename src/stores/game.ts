@@ -6,6 +6,7 @@ import { useCharacterStore } from '@/stores/character';
 import { resolveCharacterId } from '@/services/characterMapping';
 import { PRESET_ITEMS } from '@/data/items';
 import { PRESET_SPELLCARDS } from '@/data/spellcards';
+import { db } from '@/db';
 import _ from 'lodash';
 
 const NPC_FIELD_MAPPING: Record<string, string> = {
@@ -74,9 +75,12 @@ export const useGameStore = defineStore('game', () => {
     state.value = _.merge({}, state.value, newState);
   }
 
-  function setPlayerAvatar(avatarUrl: string, referenceImageUrl: string) {
+  async function setPlayerAvatar(avatarUrl: string, referenceImageUrl?: string) {
     state.value.player.avatarUrl = avatarUrl;
-    state.value.player.referenceImageUrl = referenceImageUrl;
+    if (referenceImageUrl) {
+      state.value.player.referenceImageUrl = referenceImageUrl;
+    }
+    await saveCurrentStateToLastSnapshot();
   }
 
   function setQuickReplies(replies: string[]) {
@@ -818,6 +822,32 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  /**
+   * Manually save the current game state to the most recent snapshot.
+   * Useful for persisting UI-driven changes (like persona or story summary) 
+   * that happen outside the main game loop.
+   */
+  async function saveCurrentStateToLastSnapshot() {
+    try {
+      // Find the last chat message with a snapshot
+      const lastChatWithSnapshot = await db.chats
+        .where('snapshotId')
+        .notEqual(0)
+        .reverse()
+        .first();
+
+      if (lastChatWithSnapshot && lastChatWithSnapshot.snapshotId) {
+        const currentState = JSON.parse(JSON.stringify(state.value));
+        await db.snapshots.update(lastChatWithSnapshot.snapshotId, {
+          gameState: JSON.stringify(currentState)
+        });
+        console.log('[GameStore] Persisted current state to snapshot:', lastChatWithSnapshot.snapshotId);
+      }
+    } catch (e) {
+      console.error('[GameStore] Failed to persist state to snapshot:', e);
+    }
+  }
+
   return {
     state,
     quickReplies,
@@ -836,6 +866,7 @@ export const useGameStore = defineStore('game', () => {
     unlockTalent,
     addPromise,
     updatePromise,
-    setPlayerAvatar
+    setPlayerAvatar,
+    saveCurrentStateToLastSnapshot
   };
 });

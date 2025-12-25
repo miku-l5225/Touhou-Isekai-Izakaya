@@ -58,7 +58,7 @@ watch(() => player.value.storySummary, (newVal) => {
   }
 });
 
-function handleSave() {
+async function handleSave() {
   // Smart Persona Saving
   let finalPersona = formData.value.persona;
   const rawPersona = player.value.persona;
@@ -86,6 +86,9 @@ function handleSave() {
   gameStore.state.player.name = formData.value.name;
   gameStore.state.player.persona = finalPersona;
   gameStore.state.player.storySummary = formData.value.storySummary;
+
+  // Persist to IndexedDB immediately so it's not lost on refresh
+  await gameStore.saveCurrentStateToLastSnapshot();
 
   audioManager.playLevelUp(); // Success sound
   emit('close');

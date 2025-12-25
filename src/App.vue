@@ -69,6 +69,26 @@ const isMemoryPanelOpen = ref(false);
 const isHelpOpen = ref(false);
 const helpInitialSectionId = ref<string | undefined>(undefined);
 
+const userOpenCombat = ref(false);
+const userOpenQuest = ref(false);
+
+const hasPendingTriggers = computed(() => {
+  return !!gameStore.state.system.combat?.isPending || !!gameStore.state.system.pending_quest_trigger;
+});
+
+// Reset manual open state when new triggers arrive
+watch(() => gameStore.state.system.combat?.isPending, (isPending) => {
+  if (isPending) {
+    userOpenCombat.value = false;
+  }
+});
+
+watch(() => gameStore.state.system.pending_quest_trigger, (quest) => {
+  if (quest) {
+    userOpenQuest.value = false;
+  }
+});
+
 function handleOpenHelp(sectionId?: string) {
   helpInitialSectionId.value = sectionId;
   isHelpOpen.value = true;
@@ -317,9 +337,9 @@ function handleHelpAction(action: string) {
     <SummaryModal :is-open="isSummaryModalOpen" @close="isSummaryModalOpen = false" :turn-count="summaryTurnCount" />
     <PromptBuilder :is-open="isPromptBuilderOpen" @close="isPromptBuilderOpen = false" />
     <ConfirmDialog />
-    <CombatOverlay />
+    <CombatOverlay :visible="userOpenCombat" @close="userOpenCombat = false" />
     <IzakayaGame v-if="gameStore.state.system.management?.isActive" @close="handleManagementClose" />
-    <QuestOfferModal />
+    <QuestOfferModal :visible="userOpenQuest" @close="userOpenQuest = false" />
 
     <!-- Main Content -->
     <div class="flex-1 flex overflow-hidden relative z-10">
@@ -410,6 +430,35 @@ function handleHelpAction(action: string) {
           
           <div class="relative max-w-4xl mx-auto space-y-3">
             
+            <!-- Pending Triggers Notification -->
+            <div v-if="hasPendingTriggers" class="flex flex-wrap gap-3 mb-3 animate-fade-in">
+                <!-- Combat Trigger -->
+                <button 
+                    v-if="gameStore.state.system.combat?.isPending"
+                    @click="userOpenCombat = true; audioManager.playChime()"
+                    class="group flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-touhou-red to-red-600 text-white rounded-lg shadow-lg hover:shadow-red-500/40 transform hover:-translate-y-0.5 transition-all border border-white/20"
+                >
+                    <span class="text-xl animate-bounce">⚔️</span>
+                    <div class="text-left">
+                        <div class="text-xs font-bold opacity-80 uppercase tracking-tighter">发现战斗遭遇</div>
+                        <div class="text-sm font-display">点击进入对决</div>
+                    </div>
+                </button>
+
+                <!-- Quest Trigger -->
+                <button 
+                    v-if="gameStore.state.system.pending_quest_trigger"
+                    @click="userOpenQuest = true; audioManager.playPageFlip()"
+                    class="group flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-izakaya-wood to-stone-700 text-white rounded-lg shadow-lg hover:shadow-stone-500/40 transform hover:-translate-y-0.5 transition-all border border-white/20"
+                >
+                    <span class="text-xl animate-pulse">📜</span>
+                    <div class="text-left">
+                        <div class="text-xs font-bold opacity-80 uppercase tracking-tighter">新的委托任务</div>
+                        <div class="text-sm font-display">查看任务详情</div>
+                    </div>
+                </button>
+            </div>
+
             <!-- Quick Replies -->
             <div v-if="gameStore.quickReplies.length > 0 && !gameLoop.isProcessing.value && !gameLoop.isBackgroundProcessing.value" 
                  class="flex flex-wrap gap-2 animate-fade-in-up">
