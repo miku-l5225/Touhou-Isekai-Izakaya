@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/stores/settings';
 import { useGameStore } from '@/stores/game';
 import { audioManager } from '@/services/audio';
 import { useToastStore } from '@/stores/toast';
-import { X, Save, Volume2, VolumeX, Music, Palette, CheckCircle, Image as ImageIcon, RefreshCw, AlertCircle, Check } from 'lucide-vue-next';
+import { X, Save, Volume2, VolumeX, Music, Palette, CheckCircle, Image as ImageIcon, RefreshCw, AlertCircle, Check, Download, Upload } from 'lucide-vue-next';
 import LLMConfigPanel from './LLMConfigPanel.vue';
 import { fetchModels, type ModelInfo } from '@/services/llm';
 import { 
@@ -34,9 +34,48 @@ const drawingModels = ref<ModelInfo[]>([]);
 const isLoadingDrawingModels = ref(false);
 const drawingFetchError = ref('');
   const drawingFetchSuccess = ref(false);
-  const isTestingNovelAI = ref(false);
-  const novelAITestStatus = ref<'idle' | 'success' | 'error'>('idle');
-  const novelAITestError = ref('');
+const isTestingNovelAI = ref(false);
+const novelAITestStatus = ref<'idle' | 'success' | 'error'>('idle');
+const novelAITestError = ref('');
+const importFileInput = ref<HTMLInputElement | null>(null);
+
+const handleExport = () => {
+  try {
+    settingsStore.exportGlobalConfig();
+    toastStore.addToast({ message: "配置导出成功", type: "success" });
+  } catch (error) {
+    toastStore.addToast({ message: "导出失败: " + error, type: "error" });
+  }
+};
+
+const triggerImport = () => {
+  importFileInput.value?.click();
+};
+
+const handleImport = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+
+  try {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const content = e.target?.result as string;
+      const success = await settingsStore.importGlobalConfig(content);
+      if (success) {
+        toastStore.addToast({ message: "配置导入成功，部分更改可能需要重启生效", type: "success" });
+      } else {
+        toastStore.addToast({ message: "导入失败：配置格式无效", type: "error" });
+      }
+    };
+    reader.readAsText(file);
+  } catch (error) {
+    toastStore.addToast({ message: "导入过程出错", type: "error" });
+  } finally {
+    // Reset file input
+    target.value = '';
+  }
+};
 
   const testNovelAI = async () => {
     isTestingNovelAI.value = true;
@@ -316,6 +355,31 @@ function handleVolumeChangeTest() {
                     v-model="settingsStore.globalProvider.apiKey" 
                     type="password" 
                     class="w-full bg-white/50 border border-izakaya-wood/20 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:border-touhou-red/50 focus:ring-1 focus:ring-touhou-red/20 transition-all font-mono text-sm text-izakaya-wood placeholder:text-izakaya-wood/30"
+                  >
+                </div>
+
+                <!-- Export/Import Buttons -->
+                <div class="pt-4 border-t border-izakaya-wood/10 flex flex-wrap gap-3">
+                  <button 
+                    @click="handleExport"
+                    class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-izakaya-wood/5 hover:bg-izakaya-wood/10 text-izakaya-wood rounded-md transition-colors border border-izakaya-wood/10 text-sm font-bold font-display"
+                  >
+                    <Download class="w-4 h-4" />
+                    全局导出
+                  </button>
+                  <button 
+                    @click="triggerImport"
+                    class="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-izakaya-wood/5 hover:bg-izakaya-wood/10 text-izakaya-wood rounded-md transition-colors border border-izakaya-wood/10 text-sm font-bold font-display"
+                  >
+                    <Upload class="w-4 h-4" />
+                    全局导入
+                  </button>
+                  <input 
+                    type="file" 
+                    ref="importFileInput" 
+                    class="hidden" 
+                    accept=".json" 
+                    @change="handleImport"
                   >
                 </div>
               </div>

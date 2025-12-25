@@ -209,6 +209,78 @@ export const useSettingsStore = defineStore('settings', () => {
     await db.settings.put(settingsToSave);
   }
 
+  // --- Export/Import Logic ---
+  const CUSTOM_ORIGINS_KEY = 'izakaya_custom_origins';
+
+  function exportGlobalConfig() {
+    const config = {
+      version: 1,
+      timestamp: Date.now(),
+      globalProvider: globalProvider.value,
+      llmConfigs: llmConfigs.value,
+      audio: {
+        audioVolume: audioVolume.value,
+        enableAudio: enableAudio.value,
+        bgmVolume: bgmVolume.value,
+        sfxVolume: sfxVolume.value,
+      },
+      customOrigins: [] as any[]
+    };
+
+    // Load custom origins from localStorage
+    try {
+      const savedOrigins = localStorage.getItem(CUSTOM_ORIGINS_KEY);
+      if (savedOrigins) {
+        config.customOrigins = JSON.parse(savedOrigins);
+      }
+    } catch (e) {
+      console.error('Failed to export custom origins:', e);
+    }
+
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `izakaya-global-config-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function importGlobalConfig(jsonStr: string) {
+    try {
+      const config = JSON.parse(jsonStr);
+      
+      if (config.globalProvider) globalProvider.value = config.globalProvider;
+      if (config.llmConfigs) {
+        // Merge with defaults to ensure completeness
+        const mergedConfigs = _.cloneDeep(DEFAULT_LLM_CONFIGS);
+        for (const key in config.llmConfigs) {
+          if (mergedConfigs[key]) {
+            mergedConfigs[key] = { ...mergedConfigs[key], ...config.llmConfigs[key] };
+          }
+        }
+        llmConfigs.value = mergedConfigs;
+      }
+      
+      if (config.audio) {
+        if (config.audio.audioVolume !== undefined) audioVolume.value = config.audio.audioVolume;
+        if (config.audio.enableAudio !== undefined) enableAudio.value = config.audio.enableAudio;
+        if (config.audio.bgmVolume !== undefined) bgmVolume.value = config.audio.bgmVolume;
+        if (config.audio.sfxVolume !== undefined) sfxVolume.value = config.audio.sfxVolume;
+      }
+
+      if (config.customOrigins && Array.isArray(config.customOrigins)) {
+        localStorage.setItem(CUSTOM_ORIGINS_KEY, JSON.stringify(config.customOrigins));
+      }
+
+      await saveSettings();
+      return true;
+    } catch (e) {
+      console.error('Failed to import global config:', e);
+      return false;
+    }
+  }
+
   // Helper to get effective config for a specific LLM
   function getEffectiveConfig(type: 'chat' | 'logic' | 'memory' | 'misc' | 'drawing') {
     const config = llmConfigs.value[type];
@@ -287,6 +359,8 @@ export const useSettingsStore = defineStore('settings', () => {
       drawingConfig,
       loadSettings,
       saveSettings,
+      exportGlobalConfig,
+      importGlobalConfig,
       getEffectiveConfig,
       updateLLMConfig
     };
