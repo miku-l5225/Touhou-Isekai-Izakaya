@@ -85,6 +85,13 @@ Limit your selection to a maximum of 20 items.
 If nothing is relevant, return [].
 `;
 
+/**
+ * Scribe Memory Service (Agentic RAG / World Model)
+ * 
+ * 核心职责：具身智能中的“记忆与世界模型”。
+ * 负责将原始感官数据（对话/事件）加工为结构化记忆，并通过两步检索机制实现长效时序一致性。
+ * 解决了大语言模型在长周期交互中的上下文窗口限制问题。
+ */
 export class MemoryService {
   
   /**

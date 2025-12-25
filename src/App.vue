@@ -16,7 +16,7 @@ import SummaryModal from '@/components/SummaryModal.vue';
 import HelpModal from '@/components/HelpModal.vue';
 import ToastContainer from '@/components/ToastContainer.vue';
 import NewPlayerGuide from '@/components/NewPlayerGuide.vue';
-import { Send, Settings as SettingsIcon, Save, Loader2, Square, Book, Database, Blocks, Brain, Hammer, Store, RefreshCw, HelpCircle } from 'lucide-vue-next';
+import { Send, Settings as SettingsIcon, Save, Loader2, Square, Book, Database, Blocks, Brain, Hammer, Store, RefreshCw, HelpCircle, History } from 'lucide-vue-next';
 import PromptBuilder from '@/components/PromptBuilder.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import { useConfirm } from '@/utils/confirm';
@@ -65,6 +65,7 @@ const isSettingsOpen = ref(false);
 const isCharEditorOpen = ref(false);
 const isSaveManagerOpen = ref(false);
 const isPromptBuilderOpen = ref(false);
+const isLoadingMore = ref(false);
 const isMemoryPanelOpen = ref(false);
 const isHelpOpen = ref(false);
 const helpInitialSectionId = ref<string | undefined>(undefined);
@@ -100,10 +101,60 @@ const summaryTurnCount = ref(20);
 // Scroll to bottom when messages change
 watch(() => chatStore.messages.length, () => {
   nextTick(() => {
-    if (chatContainer.value) {
+    // Only auto-scroll to bottom if we are NOT in the middle of a jump
+    if (chatContainer.value && !chatStore.jumpTargetId) {
       chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
     }
   });
+});
+
+// Handle Jump to message
+watch(() => chatStore.jumpTargetId, async (newId) => {
+  if (newId === null) return;
+
+  console.log('[App] jumpTargetId changed to:', newId);
+
+  // Give it a bit more time for DOM to stabilize, especially if messages were just loaded
+  await nextTick();
+  await new Promise(resolve => setTimeout(resolve, 100)); // Extra buffer for rendering
+  
+  // Find the message element
+  const selector = `[data-message-id="${newId}"]`;
+  let element = document.querySelector(selector);
+  
+  if (!element) {
+    // Try finding it by ID if it's on the component root
+    element = document.getElementById(`msg-${newId}`);
+  }
+
+  console.log('[App] Looking for element with selector:', selector);
+  console.log('[App] Element found:', !!element);
+
+  if (element && chatContainer.value) {
+    console.log('[App] Scrolling to element...');
+    
+    // Use a more robust scrolling method
+    const container = chatContainer.value;
+    const elementRect = element.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const scrollTarget = elementRect.top - containerRect.top + container.scrollTop - (containerRect.height / 2) + (elementRect.height / 2);
+
+    container.scrollTo({
+      top: scrollTarget,
+      behavior: 'smooth'
+    });
+    
+    // Add a temporary highlight effect
+    element.classList.add('highlight-message');
+    setTimeout(() => {
+      element.classList.remove('highlight-message');
+    }, 2000);
+  } else {
+    console.warn('[App] Could not scroll: element or chatContainer missing', { 
+      element: !!element, 
+      chatContainer: !!chatContainer.value 
+    });
+  }
 });
 
 onMounted(async () => {
@@ -129,6 +180,33 @@ onMounted(async () => {
 
   await saveStore.init(); // This will load history for the active save
 });
+
+async function handleLoadMore() {
+  if (isLoadingMore.value || !chatStore.hasMore) return;
+  
+  isLoadingMore.value = true;
+  
+  // Save current scroll position and height
+  const container = chatContainer.value;
+  const oldScrollHeight = container?.scrollHeight || 0;
+  
+  try {
+    await chatStore.loadHistory(true);
+    
+    // Wait for DOM update
+    await nextTick();
+    
+    // Restore relative scroll position
+    if (container) {
+      const newScrollHeight = container.scrollHeight;
+      container.scrollTop = newScrollHeight - oldScrollHeight;
+    }
+  } catch (e) {
+    console.error('Failed to load more history:', e);
+  } finally {
+    isLoadingMore.value = false;
+  }
+}
 
 async function handleSend() {
   const content = userInput.value.trim();
@@ -357,12 +435,25 @@ function handleHelpAction(action: string) {
           <!-- New Player Guide -->
           <NewPlayerGuide @open-save-manager="isSaveManagerOpen = true" @open-help="isHelpOpen = true" />
 
+          <!-- Load More Button -->
+          <div v-if="chatStore.hasMore" class="flex justify-center py-2">
+            <button 
+              @click="handleLoadMore" 
+              class="px-4 py-2 bg-izakaya-wood/5 hover:bg-izakaya-wood/10 text-izakaya-wood/60 text-sm rounded-full transition-colors flex items-center gap-2 border border-izakaya-wood/10"
+              :disabled="isLoadingMore"
+            >
+              <Loader2 v-if="isLoadingMore" class="w-3 h-3 animate-spin" />
+              <History v-else class="w-3 h-3" />
+              {{ isLoadingMore ? '加载中...' : '加载更早的对话' }}
+            </button>
+          </div>
+
           <div v-if="chatStore.messages.length === 0" class="text-center text-izakaya-wood/50 mt-20 flex flex-col items-center gap-4">
             <div class="text-4xl opacity-50 filter drop-shadow-sm">🍵</div>
             <p class="font-display text-lg">还没有任何对话...</p>
             <p class="text-sm">点一杯茶，开始你的幻想乡物语吧。</p>
           </div>
-          <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :message="msg" />
+          <ChatBubble v-for="msg in chatStore.messages" :key="msg.id" :message="msg" :data-message-id="msg.id" />
           
           <!-- Loading Indicator / Stream Buffer -->
           <div v-if="gameLoop.isProcessing.value" class="flex gap-4 mb-6 px-4 group/message">

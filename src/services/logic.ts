@@ -276,6 +276,13 @@ const LOGIC_SYSTEM_PROMPT = `
 `;
 
 
+/**
+ * GameMaster Logic Service (Instruction Mapper)
+ * 
+ * 核心职责：具身智能中的“决策层”。
+ * 将 Storyteller 生成的语义叙事转化为游戏世界可执行的确定性指令（JSON）。
+ * 实现了意图与执行的完全解耦，确保 LLM 的幻觉不会直接破坏游戏数值系统。
+ */
 export class LogicService {
   
   /**

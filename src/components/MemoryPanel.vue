@@ -2,7 +2,8 @@
 import { ref, watch } from 'vue';
 import { db, type MemoryEntry } from '@/db';
 import { useSaveStore } from '@/stores/save';
-import { X, Search, Trash2, Calendar, FileText, Activity, Database, Users, Brain, Edit2, Save, Clock, MapPin } from 'lucide-vue-next';
+import { useChatStore } from '@/stores/chat';
+import { X, Search, Trash2, Calendar, FileText, Activity, Database, Users, Brain, Edit2, Save, Clock, MapPin, ExternalLink } from 'lucide-vue-next';
 import _ from 'lodash';
 
 const props = defineProps<{
@@ -12,9 +13,15 @@ const props = defineProps<{
 const emit = defineEmits(['close']);
 
 const saveStore = useSaveStore();
+const chatStore = useChatStore();
 const memories = ref<MemoryEntry[]>([]);
 const searchQuery = ref('');
 const filterType = ref<string>('all');
+
+async function handleJump(turnCount: number) {
+  await chatStore.jumpToTurn(turnCount);
+  emit('close');
+}
 
 async function loadMemories() {
   if (!saveStore.currentSaveId) return;
@@ -237,11 +244,17 @@ function getTypeLabel(type: string) {
           <span>暂无相关记忆</span>
         </div>
 
-        <div v-for="mem in memories" :key="mem.id" class="bg-white/60 p-4 rounded-lg border border-izakaya-wood/10 shadow-sm hover:shadow-md hover:border-touhou-red/20 transition-all relative group animate-in slide-in-from-bottom-2 duration-300">
+        <div v-for="mem in memories" :key="mem.id" 
+          @click="handleJump(mem.turnCount)"
+          class="bg-white/60 p-4 rounded-lg border border-izakaya-wood/10 shadow-sm hover:shadow-md hover:border-touhou-red/20 transition-all relative group animate-in slide-in-from-bottom-2 duration-300 cursor-pointer"
+        >
           
           <div class="flex items-start justify-between mb-2 pr-16">
             <div class="flex items-center gap-2">
-              <span class="bg-izakaya-wood/5 text-xs px-2 py-1 rounded font-mono text-izakaya-wood/60 border border-izakaya-wood/5">Turn {{ mem.turnCount }}</span>
+              <span class="bg-izakaya-wood/5 text-xs px-2 py-1 rounded font-mono text-izakaya-wood/60 border border-izakaya-wood/5 flex items-center gap-1.5 group-hover:bg-touhou-red/5 group-hover:text-touhou-red transition-colors">
+                Turn {{ mem.turnCount }}
+                <ExternalLink class="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </span>
               <span :class="['text-xs px-2 py-1 rounded flex items-center gap-1 border', 
                 mem.type === 'summary' ? 'bg-blue-50 text-blue-700 border-blue-100' : 
                 mem.type === 'variable_change' ? 'bg-purple-50 text-purple-700 border-purple-100' : 
@@ -289,14 +302,14 @@ function getTypeLabel(type: string) {
           <!-- Actions -->
           <div class="absolute top-2 right-2 flex items-center gap-1">
              <button 
-              @click="openEditModal(mem)"
+              @click.stop="openEditModal(mem)"
               class="p-1.5 text-izakaya-wood/60 bg-white/40 hover:bg-white hover:text-blue-600 shadow-sm hover:shadow rounded-full transition-all border border-transparent hover:border-blue-100"
               title="编辑记忆"
             >
               <Edit2 class="w-4 h-4" />
             </button>
             <button 
-              @click="deleteMemory(mem.id)"
+              @click.stop="deleteMemory(mem.id)"
               class="p-1.5 text-izakaya-wood/60 bg-white/40 hover:bg-white hover:text-touhou-red shadow-sm hover:shadow rounded-full transition-all border border-transparent hover:border-red-100"
               title="删除记忆"
             >

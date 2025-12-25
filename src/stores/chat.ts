@@ -8,23 +8,73 @@ import _ from 'lodash';
 
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([]);
+  const hasMore = ref(false);
+  const pageSize = 30; // 每次加载30条
   const gameStore = useGameStore();
+  const jumpTargetId = ref<number | null>(null);
 
-  async function loadHistory() {
+  async function loadHistory(loadMore = false) {
     const saveStore = useSaveStore();
     if (!saveStore.currentSaveId) {
       messages.value = [];
+      hasMore.value = false;
       gameStore.resetState();
       return;
     }
 
-    messages.value = await db.chats
+    if (!loadMore) {
+      // 初始加载：只加载最后一页
+      const allMsgs = await db.chats
+        .where({ saveSlotId: saveStore.currentSaveId })
+        .sortBy('timestamp');
+      
+      if (allMsgs.length > pageSize) {
+        messages.value = allMsgs.slice(-pageSize);
+        hasMore.value = true;
+      } else {
+        messages.value = allMsgs;
+        hasMore.value = false;
+      }
+    } else {
+      // 加载更多：加载更早的消息
+      const firstMsg = messages.value[0];
+      if (!firstMsg) return;
+
+      const olderMsgs = await db.chats
+        .where('saveSlotId').equals(saveStore.currentSaveId)
+        .and(m => m.timestamp < firstMsg.timestamp)
+        .reverse()
+        .limit(pageSize)
+        .toArray();
+      
+      if (olderMsgs.length > 0) {
+        // reverse() because we want them in chronological order in the list
+        messages.value = [...olderMsgs.reverse(), ...messages.value];
+        
+        // Check if there are even older messages
+        const earliestTimestamp = messages.value[0]?.timestamp;
+        if (earliestTimestamp !== undefined) {
+          const count = await db.chats
+            .where('saveSlotId').equals(saveStore.currentSaveId)
+            .and(m => m.timestamp < earliestTimestamp)
+            .count();
+          hasMore.value = count > 0;
+        } else {
+          hasMore.value = false;
+        }
+      } else {
+        hasMore.value = false;
+      }
+      return; // 加载更多不需要恢复状态，状态已经是最新的
+    }
+    
+    // Load the latest state if exists (only on initial load)
+    const allMsgsForState = await db.chats
       .where({ saveSlotId: saveStore.currentSaveId })
       .sortBy('timestamp');
     
-    // Load the latest state if exists
-    if (messages.value.length > 0) {
-      const lastMsg = messages.value[messages.value.length - 1];
+    if (allMsgsForState.length > 0) {
+      const lastMsg = allMsgsForState[allMsgsForState.length - 1];
       console.log('[ChatStore] Loading history. Count:', messages.value.length, 'Last Msg ID:', lastMsg?.id, 'SnapshotId:', lastMsg?.snapshotId);
       
       if (lastMsg && lastMsg.snapshotId) {
@@ -347,14 +397,73 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  async function jumpToTurn(turnCount: number) {
+    const saveStore = useSaveStore();
+    if (!saveStore.currentSaveId) return;
+
+    console.log('[ChatStore] Jumping to turn:', turnCount);
+
+    const snapshots = await db.snapshots
+      .where('saveSlotId')
+      .equals(saveStore.currentSaveId)
+      .toArray();
+    
+    const targetSnapshot = snapshots.find(s => {
+      try {
+        const state = JSON.parse(s.gameState);
+        return state.system?.turn_count === turnCount;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!targetSnapshot || !targetSnapshot.chatId) {
+      console.warn('[ChatStore] No snapshot/chat found for turn:', turnCount);
+      return;
+    }
+
+    const targetChatId = targetSnapshot.chatId;
+    console.log('[ChatStore] Found target chatId:', targetChatId);
+    
+    const isLoaded = messages.value.some(m => m.id === targetChatId);
+    console.log('[ChatStore] Message loaded status:', isLoaded);
+
+    if (!isLoaded) {
+      console.log('[ChatStore] Loading history for jump...');
+      const allMsgs = await db.chats
+        .where('saveSlotId').equals(saveStore.currentSaveId)
+        .and(m => m.id >= targetChatId)
+        .sortBy('timestamp');
+    
+      messages.value = allMsgs;
+      
+      const count = await db.chats
+        .where('saveSlotId').equals(saveStore.currentSaveId)
+        .and(m => m.id < targetChatId)
+        .count();
+      hasMore.value = count > 0;
+      console.log('[ChatStore] History loaded, message count:', messages.value.length);
+    }
+
+    jumpTargetId.value = targetChatId;
+    console.log('[ChatStore] jumpTargetId set to:', jumpTargetId.value);
+    
+    setTimeout(() => {
+      jumpTargetId.value = null;
+    }, 1000);
+  }
+
   return {
     messages,
+    hasMore,
+    jumpTargetId,
     loadHistory,
     createInitialSnapshot,
     addMessage,
     updateMessage,
     deleteTurn,
     clearHistory,
-    rollbackTo
+    rollbackTo,
+    jumpToTurn
   };
 });

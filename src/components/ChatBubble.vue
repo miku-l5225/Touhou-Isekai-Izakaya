@@ -118,7 +118,11 @@ async function handleRegenerateMemory() {
 </script>
 
 <template>
-  <div class="flex gap-4 mb-6 group/message transition-all duration-300" :class="{ 'flex-row-reverse': isUser, 'opacity-75 hover:opacity-100': isSystem }">
+  <div 
+    :id="`msg-${message.id}`"
+    class="flex gap-4 mb-6 group/message transition-all duration-300" 
+    :class="{ 'flex-row-reverse': isUser, 'opacity-75 hover:opacity-100': isSystem }"
+  >
     <!-- Avatar -->
     <div class="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center shadow-floating border-2 border-white/50 relative overflow-hidden transition-transform duration-300 group-hover/message:scale-105 group-hover/message:rotate-3 z-10"
       :class="isUser ? 'bg-izakaya-wood-light text-white' : (isSystem ? 'bg-izakaya-wood/20 text-izakaya-wood' : 'bg-touhou-red text-white')">
