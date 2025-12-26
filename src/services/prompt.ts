@@ -466,6 +466,46 @@ MP：${p.mp}/${p.max_mp}
         content += `\n\n[当前区域角色]\n(无)`;
       }
 
+      // --- NEW: Add Known NPCs (Persistent Data) ---
+      const allRuntimeNpcs = gameStore.state.npcs;
+      const knownNPCs: string[] = [];
+
+      for (const [id, status] of Object.entries(allRuntimeNpcs)) {
+        // Skip if already in current scene (they are already listed above)
+        if (currentSceneNPCs.includes(id)) continue;
+
+        // Resolve static info for name
+        const resolvedId = resolveCharacterId(id, charStore.characters, allRuntimeNpcs);
+        const card = charStore.characters.find(c => c.uuid === resolvedId);
+        const name = card?.name || (status as any).name || id;
+
+        // Criteria for "Known NPC": non-default favorability, obedience, or relationship
+        const isSignificant = 
+          (status as any).favorability !== undefined && (status as any).favorability !== 0 ||
+          (status as any).obedience !== undefined && (status as any).obedience !== 0 ||
+          (status as any).relationship && (status as any).relationship !== '陌生人' ||
+          (status as any).residence;
+
+        if (isSignificant) {
+          let npcBrief = `- ${name}`;
+          const details = [];
+          if ((status as any).favorability !== undefined) details.push(`好感:${(status as any).favorability}`);
+          if ((status as any).obedience !== undefined) details.push(`服从:${(status as any).obedience}`);
+          if ((status as any).relationship) details.push(`关系:${(status as any).relationship}`);
+          if ((status as any).residence) details.push(`住所:${(status as any).residence}`);
+          
+          if (details.length > 0) {
+            npcBrief += `: ${details.join(', ')}`;
+          }
+          knownNPCs.push(npcBrief);
+        }
+      }
+
+      if (knownNPCs.length > 0) {
+        content += `\n\n[已知角色及关系 (不在当前区域)]\n${knownNPCs.join('\n')}`;
+      }
+      // ----------------------------------------------
+
       // Add Active Quests
       const activeQuests = gameStore.state.system.quests?.filter(q => q.status === 'active') || [];
       if (activeQuests.length > 0) {

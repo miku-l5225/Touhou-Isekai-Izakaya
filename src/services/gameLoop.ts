@@ -481,6 +481,18 @@ class GameLoopService {
         finalStory, // Use cleaned story
         gameStore.state
       );
+
+      // Clear Minigame Result after it has been sent to logic model
+      // This prevents the same combat result from being re-processed in subsequent turns
+      if (gameStore.state.system.minigame_result || gameStore.state.system.minigame_triggered) {
+        gameStore.updateState({
+          system: {
+            ...gameStore.state.system,
+            minigame_result: '',
+            minigame_triggered: false
+          }
+        });
+      }
       
       // Store Quick Replies (regardless of whether we use them immediately)
       if (logicResult.quick_replies && Array.isArray(logicResult.quick_replies)) {

@@ -476,12 +476,6 @@ export const useGameStore = defineStore('game', () => {
              }
           }
 
-          // Ensure NPC is in the current scene list (Auto-add feature)
-          // This fixes the issue where LLM updates a char but forgets SCENE action
-          if (!state.value.system.current_scene_npcs.includes(npcId)) {
-             state.value.system.current_scene_npcs.push(npcId);
-          }
-          
           const npc = state.value.npcs[npcId];
           if (!npc) return;
           
