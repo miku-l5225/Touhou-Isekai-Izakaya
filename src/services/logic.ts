@@ -317,6 +317,8 @@ export class LogicService {
     const sanitized = { ...player };
     delete sanitized.avatarUrl;
     delete sanitized.referenceImageUrl;
+    delete sanitized.persona; // Logic doesn't need narrative persona
+    delete sanitized.storySummary; // Logic doesn't need long-term narrative summary
     return sanitized;
   }
 
@@ -394,26 +396,78 @@ export class LogicService {
 
     // Heuristic: Scan story for NPC names to include them in context
     // This ensures that if a pre-defined character appears, the Logic Model sees their initial stats
-    // Enhanced: Scan previous 2 turns (approx 4 messages) + current content
+    // Enhanced: Scan previous 2 turns (approx 4 messages) + current content + predicted characters
     const chatStore = useChatStore();
     const recentMessages = chatStore.messages.slice(-4);
     const recentContext = recentMessages.map(m => m.content).join('\n');
-    const scanText = recentContext + '\n' + userContent + '\n' + storyContent;
+    const predictedCharsList = (gameState.system.predicted_next_round_chars || []).join(', ');
+    const scanText = recentContext + '\n' + userContent + '\n' + storyContent + '\n' + predictedCharsList;
 
-    const allNpcs = gameState.npcs ? Object.values(gameState.npcs) : [];
-    const mentionedNpcs = allNpcs.filter((npc: any) => {
-        if (!npc.name) return false;
-        return scanText.includes(npc.name);
-    });
-
-    // Merge mentioned NPCs with current_scene_npcs (avoiding duplicates)
-    const currentSceneIds = new Set(gameState.system.current_scene_npcs);
-    const relevantNpcs = [...gameState.system.current_scene_npcs.map((id: string) => gameState.npcs[id] || { id, name: id })];
+    // 1. Get all NPCs already in the runtime state
+    const allRuntimeNpcs = gameState.npcs ? Object.values(gameState.npcs) : [];
+    const charStore = useCharacterStore();
     
-    for (const npc of mentionedNpcs) {
+    // 2. Scan text to find mentioned characters (from runtime state OR static lorebook)
+    const mentionedNpcMap = new Map<string, any>();
+    
+    // Strategy A: Check runtime NPCs
+    for (const npc of allRuntimeNpcs) {
         // @ts-ignore
-        if (!currentSceneIds.has(npc.id)) {
+        if (npc.name && scanText.includes(npc.name)) {
             // @ts-ignore
+            mentionedNpcMap.set(npc.id, npc);
+        }
+    }
+
+    // Strategy B: Check static Lorebook for characters not yet in runtime state OR missing details
+    for (const char of charStore.characters) {
+        if (scanText.includes(char.name) || (char.tags && char.tags.some(tag => scanText.includes(tag)))) {
+            if (!mentionedNpcMap.has(char.uuid)) {
+                // Add a "proto-NPC" based on static data (Logic-focused fields only)
+                mentionedNpcMap.set(char.uuid, {
+                    id: char.uuid,
+                    name: char.name,
+                    power: char.initialPower || 'E',
+                    gender: char.gender || 'female',
+                    tags: char.tags || [],
+                    isProto: true // Mark as not yet instantiated in game state
+                });
+            }
+        }
+    }
+
+    // 3. Combine with current scene NPCs
+    const currentSceneIds = new Set(gameState.system.current_scene_npcs);
+    const relevantNpcs: any[] = [];
+    
+    // Add current scene NPCs (prioritize runtime state, then Lorebook)
+    for (const id of gameState.system.current_scene_npcs) {
+        if (!id) continue;
+        
+        let npcData = gameState.npcs[id];
+        if (!npcData) {
+            // Try to find in Lorebook if missing from runtime state
+            const resolvedId = resolveCharacterId(id, charStore.characters, gameState.npcs);
+            const staticChar = charStore.characters.find(c => c.uuid === resolvedId);
+            if (staticChar) {
+                npcData = {
+                    id: staticChar.uuid,
+                    name: staticChar.name,
+                    power: staticChar.initialPower || 'E',
+                    gender: staticChar.gender || 'female',
+                    tags: staticChar.tags || [],
+                    isProto: true
+                };
+            } else {
+                npcData = { id, name: id };
+            }
+        }
+        relevantNpcs.push(npcData);
+    }
+    
+    // Add mentioned NPCs that are NOT in the current scene
+    for (const [id, npc] of mentionedNpcMap.entries()) {
+        if (!currentSceneIds.has(id)) {
             relevantNpcs.push(npc);
         }
     }

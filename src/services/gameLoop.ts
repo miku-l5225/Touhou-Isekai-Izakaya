@@ -93,6 +93,19 @@ class GameLoopService {
       // 0. Update Turn & Retrieve Memory
       const gameStore = useGameStore();
       gameStore.incrementTurn();
+
+      // Clear pending triggers if user chose to type instead of clicking them
+      // This prevents "Enter Duel" or "Quest Offer" buttons from persisting across rounds
+      if (gameStore.state.system.combat?.isPending) {
+        gameStore.setCombatState(null);
+        console.log('[GameLoop] Cleared pending combat trigger because user performed a different action.');
+      }
+      
+      if (gameStore.state.system.pending_quest_trigger) {
+        gameStore.setPendingQuest(null);
+        console.log('[GameLoop] Cleared pending quest trigger because user performed a different action.');
+      }
+
       const settingsStore = useSettingsStore();
       const currentSaveSlotId = settingsStore.currentSaveSlotId || 1;
       
@@ -1099,12 +1112,7 @@ class GameLoopService {
       bgm_suggestion: triggerData.bgm_suggestion || '常规'
     };
 
-    gameStore.updateState({
-      system: {
-        ...gameStore.state.system,
-        combat: combatState
-      }
-    });
+    gameStore.setCombatState(combatState);
     
     console.log('[Game Loop] Combat Initialized (Pending User Confirmation)');
   }

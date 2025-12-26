@@ -764,7 +764,11 @@ export const useGameStore = defineStore('game', () => {
              if (staticChar) {
                 charId = staticChar.uuid;
                 if (!state.value.npcs[charId]) {
-                   state.value.npcs[charId] = { id: charId, name: staticChar.name } as any;
+                   state.value.npcs[charId] = { 
+                     id: charId, 
+                     name: staticChar.name,
+                     power: staticChar.initialPower || 'F' // Pull initial power level from Lorebook
+                   } as any;
                 }
              }
 
@@ -777,13 +781,17 @@ export const useGameStore = defineStore('game', () => {
                  state.value.npcs[charId] = { 
                     id: charId, 
                     name: staticChar ? staticChar.name : charId,
-                    gender: staticChar?.gender as any
+                    gender: staticChar?.gender as any,
+                    power: staticChar?.initialPower || 'F' // Ensure power is set
                  } as any;
              } else {
-                 // Patch existing NPC if gender is missing
+                 // Patch existing NPC if gender or power is missing
                  const existingNpc = state.value.npcs[charId];
                  if (existingNpc && !existingNpc.gender && staticChar?.gender) {
                     existingNpc.gender = staticChar.gender as any;
+                 }
+                 if (existingNpc && !existingNpc.power && staticChar?.initialPower) {
+                    existingNpc.power = staticChar.initialPower as any;
                  }
              }
              
