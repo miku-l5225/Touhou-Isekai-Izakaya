@@ -84,8 +84,17 @@ class GameLoopService {
   }
 
   async handleUserAction(userContent: string) {
-    if (this.isProcessing.value || this.isBackgroundProcessing.value) return;
-    if (!userContent.trim()) return;
+    if (this.isProcessing.value || this.isBackgroundProcessing.value) {
+      console.warn('[GameLoop] handleUserAction ignored because already processing:', {
+        isProcessing: this.isProcessing.value,
+        isBackgroundProcessing: this.isBackgroundProcessing.value
+      });
+      return;
+    }
+    if (!userContent.trim()) {
+      console.warn('[GameLoop] handleUserAction ignored because content is empty');
+      return;
+    }
     
     this.startLoop();
     
@@ -661,10 +670,13 @@ class GameLoopService {
 
       // 1. Generate Narrative via Logic Model (Narrator Mode)
       // This is a separate API call as requested
+      console.log('[GameLoop] Calling generateCombatNarrative...');
       const narrative = await logicService.generateCombatNarrative(resultSummary, combatants, contextText);
+      console.log('[GameLoop] Narrative received, length:', narrative?.length || 0);
       
       // 2. Construct User Action for Story Model
       const content = `【战斗回放】\n${narrative}\n\n(请承接以上战斗结果，继续推进剧情)`;
+      console.log('[GameLoop] Final content for handleUserAction:', content);
       
       // 3. Proceed with standard User Action handling
       this.currentStage.value = 'idle'; // Reset stage before calling handleUserAction as it sets its own stages

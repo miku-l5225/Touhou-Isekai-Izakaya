@@ -91,8 +91,11 @@ export async function generateCompletion(options: CompletionOptions): Promise<st
       content = (response as any).choices[0]?.message?.content || '';
     }
     
-    // Strip CoT tags
-    return content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+    // Strip CoT tags (both <think> and <thinking>)
+    return content
+      .replace(/<(think|thinking)>[\s\S]*?<\/\1>/gi, '')
+      .replace(/<(think|thinking)>[\s\S]*/gi, '') // Also strip unclosed tags
+      .trim();
   } catch (error: any) {
     console.error('LLM Completion Failed:', error);
     throw error;

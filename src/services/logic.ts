@@ -736,6 +736,7 @@ export class LogicService {
 
       // 1. Call API (Using LLM4 / Misc Model)
       // Note: We use 'misc' (LLM4) for text polishing as requested
+      console.log('[LogicService] Generating combat narrative with summary length:', combatSummary.length);
       const content = await generateCompletion({
         modelType: 'misc',
         systemPrompt,
@@ -745,7 +746,14 @@ export class LogicService {
         signal
       });
       
-      return content.trim();
+      console.log('[LogicService] Generated narrative length:', content.length);
+      const trimmedContent = content.trim();
+      if (!trimmedContent) {
+        console.warn('[LogicService] Generated narrative is empty! Falling back to original summary.');
+        return `(战斗描写生成为空，以下是原始记录)\n${combatSummary}`;
+      }
+
+      return trimmedContent;
 
     } catch (e: any) {
       console.error('Combat Narration Failed:', e);
