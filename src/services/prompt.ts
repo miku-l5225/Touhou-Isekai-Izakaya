@@ -34,9 +34,24 @@ export class PromptService {
   }
 
   private registerHandlers() {
-    // 1. System Root (Static/Configurable)
+    // 1. System Root (Static/Selectable Options)
     this.blockHandlers['system_root'] = async (ctx, content) => {
-      this.addSection(ctx, 'system_root', '核心规则', 'system', content || '');
+      const promptStore = usePromptStore();
+      const block = promptStore.blocks.find(b => b.id === 'system_root');
+      
+      let finalContent = content || '';
+      
+      // If has options, use the selected one
+      if (block && block.options && block.options.length > 0) {
+        const options = block.options;
+        const selectedId = block.selectedOptionId || options[0].id;
+        const selectedOption = options.find(o => o.id === selectedId);
+        if (selectedOption) {
+          finalContent = selectedOption.content;
+        }
+      }
+
+      this.addSection(ctx, 'system_root', '核心规则', 'system', finalContent);
     };
 
     // 2. Narrative Perspective (Selectable Options)

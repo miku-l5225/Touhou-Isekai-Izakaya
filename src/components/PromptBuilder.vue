@@ -202,9 +202,9 @@ const dragOptions = computed(() => ({
                         {{ opt.name }}
                       </button>
 
-                      <!-- Option Edit/Delete (Debug Mode only for Writing Style) -->
+                      <!-- Option Edit/Delete (Debug Mode only for Writing Style and System Root) -->
                       <div 
-                        v-if="isDebugMode && element.id === 'writing_style'"
+                        v-if="isDebugMode && (element.id === 'writing_style' || element.id === 'system_root')"
                         class="absolute -top-1 -right-1 flex gap-0.5 opacity-0 group-hover/opt:opacity-100 transition-opacity"
                       >
                         <button 
@@ -215,7 +215,7 @@ const dragOptions = computed(() => ({
                           <Edit class="w-3 h-3" />
                         </button>
                         <button 
-                          v-if="opt.id.startsWith('custom_')"
+                          v-if="opt.id.startsWith('custom_') || (element.id === 'writing_style' && opt.id.startsWith('custom_'))"
                           @click.stop="handleDeleteOption(element.id, opt.id)"
                           class="p-1 bg-white border border-izakaya-wood/10 rounded-full text-izakaya-wood/50 hover:text-touhou-red shadow-sm"
                           title="删除选项"
