@@ -409,7 +409,7 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
 </script>
 
 <template>
-  <div class="h-screen flex flex-col overflow-hidden font-sans text-ink relative">
+  <div class="fixed inset-0 flex flex-col overflow-hidden font-sans text-ink bg-izakaya-paper">
     
     <SakuraBackground />
     <ToastContainer />
@@ -497,7 +497,8 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
         <!-- Mobile: Status Panel -->
         <div
           v-show="mobileActivePanel === 'status'"
-          class="absolute inset-0 overflow-y-auto p-4 space-y-4 pb-20 bg-izakaya-paper/40"
+          class="absolute inset-0 overflow-y-auto p-4 space-y-4 pb-20 bg-izakaya-paper/40 overscroll-contain"
+          style="-webkit-overflow-scrolling: touch;"
         >
           <StatusCard ref="statusCardRef" @open-help="handleOpenHelp" @open-summary="handleOpenSummary" />
         </div>
@@ -505,7 +506,8 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
         <!-- Mobile: Characters Panel -->
         <div
           v-show="mobileActivePanel === 'characters'"
-          class="absolute inset-0 overflow-y-auto p-4 pb-20 bg-izakaya-paper/40"
+          class="absolute inset-0 overflow-y-auto p-4 pb-20 bg-izakaya-paper/40 overscroll-contain"
+          style="-webkit-overflow-scrolling: touch;"
         >
           <CharacterList />
         </div>
@@ -513,7 +515,8 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
         <!-- Mobile: Quests Panel -->
         <div
           v-show="mobileActivePanel === 'quests'"
-          class="absolute inset-0 overflow-y-auto p-4 pb-20 bg-izakaya-paper/40"
+          class="absolute inset-0 overflow-y-auto p-4 pb-20 bg-izakaya-paper/40 overscroll-contain"
+          style="-webkit-overflow-scrolling: touch;"
         >
           <QuestList />
         </div>
@@ -521,10 +524,10 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
         <!-- Mobile: Chat Panel (default) -->
         <div
           v-show="mobileActivePanel === 'chat'"
-          class="flex-1 flex flex-col relative min-w-0"
+          class="absolute inset-0 flex flex-col overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))]"
         >
           <!-- Chat Area -->
-          <div ref="chatContainer" class="flex-1 overflow-y-auto p-3 space-y-4 scroll-smooth pb-20">
+          <div ref="chatContainer" class="flex-1 overflow-y-auto p-3 space-y-4 scroll-smooth overscroll-contain" style="-webkit-overflow-scrolling: touch;">
           <!-- New Player Guide -->
           <NewPlayerGuide @open-save-manager="isSaveManagerOpen = true" @open-help="isHelpOpen = true" />
 
@@ -627,7 +630,7 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
         </div>
 
         <!-- Input Area (Mobile) -->
-          <div class="p-3 bg-izakaya-paper border-t-2 border-izakaya-wood/20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] relative z-20 mb-16">
+          <div class="p-3 bg-izakaya-paper border-t-2 border-izakaya-wood/20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] relative z-20 flex-shrink-0">
             <!-- Texture -->
             <div class="absolute inset-0 pointer-events-none opacity-40 bg-texture-rice-paper mix-blend-multiply"></div>
 
@@ -880,7 +883,7 @@ function handleMobilePanelSwitch(panel: 'chat' | 'status' | 'map' | 'characters'
                   :placeholder="gameLoop.isBackgroundProcessing.value ? '正在后台处理，请稍等...' : '在此书写你的行动...'"
                   class="absolute bottom-0 left-0 w-full rounded-none px-2 py-3 focus:outline-none resize-none transition-all duration-300 ease-out origin-bottom font-serif-display text-xl text-ink placeholder:text-ink-light/40 leading-relaxed"
                   :class="[
-                    (isInputFocused || userInput) ? 'h-40 bg-izakaya-paper shadow-[-4px_-4px_15px_rgba(0,0,0,0.1)] rounded-t-lg border-2 border-izakaya-wood/30 z-30' : 'h-14 bg-transparent border-b-2 border-izakaya-wood/30 z-10'
+                    (isInputFocused || userInput) ? 'h-40 bg-izakaya-paper shadow-[-4px_-4px_15px_rgba(0,0,0,0.1)] rounded-t-lg border-2 border-izakaya-wood/30 z-30' : 'h-14 bg-white/50 border-b-2 border-izakaya-wood/30 z-10'
                   ]"
                 ></textarea>
                 

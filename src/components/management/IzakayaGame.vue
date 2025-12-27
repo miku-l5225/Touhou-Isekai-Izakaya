@@ -688,14 +688,22 @@ const handleVirtualAction = () => {
   justify-content: center;
   align-items: center;
   z-index: 2000; /* High z-index to cover everything */
+  overflow: hidden;
 }
 
 canvas {
-  background: #2c3e50;
+  background: #1a1a1a; /* Match container to avoid color gaps */
   box-shadow: 0 0 20px rgba(0,0,0,0.5);
   border-radius: 4px;
   image-rendering: pixelated; /* Sharp pixels */
   image-rendering: crisp-edges;
+
+  /* Responsive scaling for mobile */
+  max-width: 100vw;
+  max-height: 100vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
 }
 
 .ui-overlay {
@@ -1176,5 +1184,105 @@ canvas {
 .full-width {
     width: 100%;
     justify-content: center;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .header {
+        top: 10px;
+        padding: 6px 12px;
+        font-size: 0.75rem;
+        gap: 10px;
+    }
+
+    .header .title {
+        display: none;
+    }
+
+    .money-display {
+        top: 10px;
+        right: 10px;
+        padding: 6px 12px;
+        font-size: 1rem;
+        gap: 6px;
+    }
+
+    .coin-icon {
+        width: 18px;
+        height: 18px;
+        font-size: 11px;
+    }
+
+    .orders-stack-container {
+        bottom: 140px;
+        left: 10px;
+        width: 180px;
+        height: 200px;
+    }
+
+    .orders-title {
+        font-size: 0.9rem;
+    }
+
+    .order-card-stack {
+        padding: 8px;
+    }
+
+    .dish-name {
+        font-size: 0.95rem;
+    }
+
+    .customer-name {
+        font-size: 0.75rem;
+    }
+
+    .hand-inventory {
+        bottom: 160px;
+    }
+
+    .hand-slot {
+        width: 60px;
+        height: 60px;
+    }
+
+    .item-icon {
+        font-size: 1.5rem;
+    }
+
+    .item-name {
+        font-size: 0.7rem;
+    }
+
+    .dialog-box {
+        width: 95%;
+        max-width: none;
+    }
+
+    .evaluation-box {
+        width: 90%;
+        max-width: 350px;
+    }
+
+    .eval-header {
+        padding: 15px;
+    }
+
+    .eval-header h2 {
+        font-size: 1.2rem;
+    }
+
+    .score-badge {
+        width: 50px;
+        height: 50px;
+        font-size: 1.4rem;
+    }
+
+    .eval-content {
+        padding: 15px;
+    }
+
+    .customer-comment {
+        font-size: 0.95rem;
+    }
 }
 </style>

@@ -428,8 +428,8 @@ function handleTouchEnd() {
       <!-- Backdrop -->
       <div class="absolute inset-0 bg-izakaya-wood/80 backdrop-blur-sm" @click="handleClose"></div>
       
-      <!-- Content Container (Frameless 21:9 Window) -->
-      <div class="relative w-full max-w-[90vw] bg-stone-950 rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 mx-auto aspect-[21/9] border border-white/10">
+      <!-- Content Container (fullscreen with padding) -->
+      <div class="relative w-full h-full max-w-[95vw] max-h-[90vh] bg-stone-950 rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 border border-white/10">
 
         <!-- Map Viewer (Full Surface) -->
         <div
@@ -453,7 +453,7 @@ function handleTouchEnd() {
               <img
                 src="@/assets/images/map/幻想乡地图.jpg"
                 alt="幻想乡地图"
-                class="block max-w-none pointer-events-none select-none w-auto h-[calc(90vw*9/21)] max-h-[80vh]"
+                class="block pointer-events-none select-none max-w-none h-[90vh]"
               />
 
               <!-- Location Markers (positioned relative to image) -->
@@ -490,7 +490,13 @@ function handleTouchEnd() {
 
           <!-- Location Detail Card (Overlay on the whole container) -->
           <Transition name="slide-fade">
-            <div v-if="selectedLocation" class="absolute right-6 top-24 bottom-24 w-80 z-30 pointer-events-auto">
+            <div
+              v-if="selectedLocation"
+              class="absolute right-2 md:right-6 top-16 md:top-24 bottom-16 md:bottom-24 left-2 md:left-auto w-auto md:w-80 z-30 pointer-events-auto"
+              @touchstart.stop
+              @touchmove.stop
+              @mousedown.stop
+            >
               <div class="h-full bg-izakaya-paper/95 backdrop-blur-xl rounded-2xl shadow-2xl border-2 border-izakaya-wood/20 overflow-hidden flex flex-col relative">
                 <!-- Card Texture -->
                 <div class="absolute inset-0 pointer-events-none opacity-20 bg-texture-rice-paper mix-blend-multiply"></div>
@@ -507,7 +513,7 @@ function handleTouchEnd() {
                 </button>
 
                 <!-- Card Content -->
-                <div class="relative z-0 pt-14 px-6 pb-6 flex-1 overflow-y-auto custom-scrollbar space-y-6">
+                <div class="relative z-0 pt-14 px-6 pb-6 flex-1 overflow-y-auto custom-scrollbar space-y-6 overscroll-contain" style="-webkit-overflow-scrolling: touch;">
                   <!-- Main Location Content -->
                   <div v-if="!selectedSubLocationName" class="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                     <!-- Header -->
